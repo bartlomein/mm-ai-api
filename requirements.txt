@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+httpx
+python-dotenv
+supabase
+google-generativeai
+openai
+stripe
+pydantic
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+aiofiles
+apscheduler
