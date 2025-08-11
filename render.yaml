@@ -1,0 +1,40 @@
+services:
+  # Main API Service
+  - type: web
+    name: market-brief-api
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn src.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: FISH_API_KEY
+        sync: false
+      - key: FISH_MODEL_ID
+        value: 56431e329b21489c9f9f7ab9c77312d4
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FINLIGHT_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+    healthCheckPath: /api/health
+    autoDeploy: true
+    
+  # Morning Briefing Cron Job (6 AM EST = 11 AM UTC)
+  - type: cron
+    name: morning-briefing
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python generate_briefing_v2.py"
+    schedule: "0 11 * * *"
+    envVars:
+      - fromGroup: market-brief-api
+      
+  # Evening Briefing Cron Job (6 PM EST = 11 PM UTC)
+  - type: cron
+    name: evening-briefing
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python generate_briefing_v2.py"
+    schedule: "0 23 * * *"
+    envVars:
+      - fromGroup: market-brief-api

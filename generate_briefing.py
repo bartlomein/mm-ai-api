@@ -23,7 +23,6 @@ print("🔧 TTS Configuration:")
 print(f"   Fish Audio API Key present: {bool(os.getenv('FISH_API_KEY'))}")
 print(f"   Fish Model ID: {os.getenv('FISH_MODEL_ID', 'Not set (will use default)')}")
 print(f"   OpenAI API Key present: {bool(os.getenv('OPENAI_API_KEY'))}")
-print(f"   Kokoro URL: {os.getenv('KOKORO_URL', 'Not configured')}")
 print("" + "=" * 50)
 
 # OpenAI Voice Options (used as fallback if Fish Audio not available)

@@ -11,14 +11,13 @@ load_dotenv()
 print("[Main] Environment check:")
 print(f"[Main] FISH_API_KEY present: {bool(os.getenv('FISH_API_KEY'))}")
 print(f"[Main] OPENAI_API_KEY present: {bool(os.getenv('OPENAI_API_KEY'))}")
-print(f"[Main] KOKORO_URL: {os.getenv('KOKORO_URL', 'Not set')}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("Starting up Market Brief API...")
-    print(f"[Main] Using OpenAI: {bool(os.getenv('OPENAI_API_KEY'))}")
-    print(f"[Main] Kokoro fallback available: {bool(os.getenv('KOKORO_URL'))}")
+    print(f"[Main] Fish Audio configured: {bool(os.getenv('FISH_API_KEY'))}")
+    print(f"[Main] OpenAI configured: {bool(os.getenv('OPENAI_API_KEY'))}")
     yield
     # Shutdown
     print("Shutting down...")
@@ -54,8 +53,6 @@ async def health_check():
         primary_service = "Fish Audio"
     elif os.getenv("OPENAI_API_KEY"):
         primary_service = "OpenAI"
-    elif os.getenv("KOKORO_URL"):
-        primary_service = "Kokoro"
     else:
         primary_service = "None configured"
     
@@ -65,7 +62,6 @@ async def health_check():
         "tts_config": {
             "fish_configured": bool(os.getenv("FISH_API_KEY")),
             "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
-            "kokoro_configured": bool(os.getenv("KOKORO_URL")),
             "primary_service": primary_service
         }
     }

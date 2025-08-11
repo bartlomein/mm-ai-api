@@ -6,7 +6,7 @@ Market Brief AI is an automated financial news briefing system that generates 5-
 ## Key Features
 - **Automated News Aggregation**: Fetches latest financial news from Finlight API
 - **AI-Powered Summarization**: Uses Google Gemini to create professional market briefings
-- **Text-to-Speech**: Converts briefings to audio using Fish Audio (primary), OpenAI TTS, or Kokoro
+- **Text-to-Speech**: Converts briefings to audio using Fish Audio (primary) or OpenAI TTS (fallback)
 - **5-Minute Format**: Generates exactly 750-850 words for consistent 5-minute audio briefings
 - **Smart Deduplication**: Avoids repeating similar news stories
 - **Professional Formatting**: Properly formats stock tickers, numbers, and financial terms for TTS
@@ -17,7 +17,7 @@ Market Brief AI is an automated financial news briefing system that generates 5-
 ```
 src/
 ├── services/
-│   ├── audio_service.py      # TTS generation (Fish Audio, OpenAI, Kokoro)
+│   ├── audio_service.py      # TTS generation (Fish Audio, OpenAI)
 │   ├── news_service.py        # Finlight API integration
 │   ├── summary_service.py     # Gemini AI summarization
 │   └── pipeline_service.py    # Orchestrates the full pipeline
@@ -45,8 +45,7 @@ DEEPSEEK_API_KEY=xxx           # Optional: Fallback LLM
 # Text-to-Speech (in priority order)
 FISH_API_KEY=xxx               # Primary: Best quality, no char limit
 FISH_MODEL_ID=xxx              # Optional: Specific voice model ID
-OPENAI_API_KEY=xxx             # Secondary: 4096 char limit
-KOKORO_URL=http://localhost:8880  # Tertiary: Self-hosted fallback
+OPENAI_API_KEY=xxx             # Fallback: 4096 char limit
 
 # Database (Future)
 SUPABASE_URL=xxx
@@ -159,13 +158,14 @@ python test_briefing_length.py
 python test_fish_voices.py
 ```
 
-### Docker Commands
+### Run the Server
 ```bash
-# Start Kokoro TTS (if using)
-docker-compose up -d kokoro
+# Simple start
+./run.sh
 
-# Start all services
-docker-compose up -d
+# Or manually
+source venv/bin/activate
+uvicorn src.main:app --reload --port 8000
 ```
 
 ## Code Quality

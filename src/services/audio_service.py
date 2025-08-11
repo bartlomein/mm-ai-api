@@ -37,11 +37,6 @@ class AudioService:
             print(f"[AudioService] No OpenAI API key found")
             self.openai_client = None
             
-        # Tertiary: Kokoro TTS (self-hosted, free)
-        self.kokoro_url = os.getenv("KOKORO_URL", "http://localhost:8880")
-        self.use_kokoro_fallback = bool(self.kokoro_url)
-        print(f"[AudioService] Kokoro URL: {self.kokoro_url}")
-        print(f"[AudioService] Kokoro fallback available: {self.use_kokoro_fallback}")
         
     async def generate_audio(self, text: str, voice: str = None, tier: str = "free") -> bytes:
         """
@@ -71,18 +66,11 @@ class AudioService:
                 print(f"[AudioService] Using OpenAI voice '{voice}' and tier '{tier}'")
                 return await self._generate_with_openai(text, voice, tier)
             
-            # Final fallback to Kokoro
-            elif self.use_kokoro_fallback:
-                print(f"[AudioService] WARNING: Fish and OpenAI not configured, falling back to Kokoro TTS")
-                kokoro_voice = "af_bella" if tier == "free" else "af_sarah"
-                print(f"[AudioService] Using Kokoro voice: {kokoro_voice}")
-                return await self._generate_with_kokoro(text, kokoro_voice)
             else:
                 print(f"[AudioService] ERROR: No TTS service configured!")
                 print(f"[AudioService] Fish session: {self.fish_session}")
                 print(f"[AudioService] OpenAI client: {self.openai_client}")
-                print(f"[AudioService] Kokoro fallback: {self.use_kokoro_fallback}")
-                raise Exception("No TTS service configured. Please set FISH_API_KEY, OPENAI_API_KEY, or KOKORO_URL")
+                raise Exception("No TTS service configured. Please set FISH_API_KEY or OPENAI_API_KEY")
                 
         except Exception as e:
             print(f"[AudioService] ERROR generating audio: {str(e)}")
@@ -93,46 +81,10 @@ class AudioService:
                 print(f"[AudioService] Fish failed, attempting OpenAI fallback...")
                 voice = "nova" if tier == "premium" else "alloy"
                 return await self._generate_with_openai(text, voice, tier)
-            elif self.openai_client and self.use_kokoro_fallback:
-                print(f"[AudioService] OpenAI failed, attempting Kokoro fallback...")
-                kokoro_voice = "af_bella" if tier == "free" else "af_sarah"
-                return await self._generate_with_kokoro(text, kokoro_voice)
             else:
                 print(f"[AudioService] No fallback available, re-raising error")
                 raise
     
-    async def _generate_with_kokoro(self, text: str, voice: str = "af_bella") -> bytes:
-        """
-        Generate audio using Kokoro TTS
-        """
-        url = f"{self.kokoro_url}/v1/audio/speech"
-        print(f"[AudioService] Kokoro TTS request to: {url}")
-        print(f"[AudioService] Kokoro voice: {voice}")
-        print(f"[AudioService] Text length: {len(text)} characters")
-        
-        payload = {
-            "model": "kokoro",
-            "input": text,
-            "voice": voice,
-            "response_format": "mp3",
-            "speed": 1.0
-        }
-        
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                print(f"[AudioService] Kokoro TTS success! Audio size: {len(response.content)} bytes")
-                return response.content
-            else:
-                error_detail = response.text
-                print(f"[AudioService] Kokoro TTS failed with status {response.status_code}")
-                print(f"[AudioService] Error details: {error_detail}")
-                raise Exception(f"Kokoro API error {response.status_code}: {error_detail}")
     
     async def _generate_with_openai(self, text: str, voice: str = "alloy", tier: str = "free") -> bytes:
         """
@@ -224,19 +176,6 @@ class AudioService:
             print(f"[AudioService] Error type: {type(e).__name__}")
             raise
     
-    def _map_to_kokoro_voice(self, openai_voice: str) -> str:
-        """
-        Map OpenAI voice names to Kokoro equivalents
-        """
-        voice_mapping = {
-            "alloy": "af_bella",      # Neutral -> American female
-            "echo": "bm_george",       # Articulate -> British male
-            "fable": "af_sarah",       # Expressive -> American female
-            "onyx": "am_michael",      # Deep -> American male
-            "nova": "af_nicole",       # Conversational -> American female
-            "shimmer": "bf_emma"       # Warm -> British female
-        }
-        return voice_mapping.get(openai_voice, "af_bella")
     
     def estimate_duration(self, text: str) -> int:
         """
