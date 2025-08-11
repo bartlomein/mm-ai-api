@@ -18,7 +18,7 @@ class PipelineService:
         self.temp_dir = "/tmp/audio_briefings"
         os.makedirs(self.temp_dir, exist_ok=True)
     
-    async def generate_general_briefing(self) -> Dict:
+    async def generate_general_briefing(self, voice: Optional[str] = None) -> Dict:
         """
         Generate a general market briefing for free tier
         This will be called once daily at 6 AM EST
@@ -44,7 +44,7 @@ class PipelineService:
             
             print("Step 3: Generating audio...")
             # 3. Generate audio
-            audio_bytes = await self.audio_service.generate_audio(script, tier="free")
+            audio_bytes = await self.audio_service.generate_audio(script, voice=voice, tier="free")
             
             if not audio_bytes:
                 raise Exception("Failed to generate audio")
@@ -83,7 +83,7 @@ class PipelineService:
                 "generated_at": datetime.now().isoformat()
             }
     
-    async def generate_personalized_briefing(self, tickers: List[str], user_id: Optional[str] = None) -> Dict:
+    async def generate_personalized_briefing(self, tickers: List[str], voice: Optional[str] = None, user_id: Optional[str] = None) -> Dict:
         """
         Generate a personalized briefing for premium tier
         """
@@ -105,8 +105,8 @@ class PipelineService:
             print(f"Generated script: {len(script)} characters")
             
             print("Step 3: Generating premium audio...")
-            # 3. Generate audio with better voice
-            audio_bytes = await self.audio_service.generate_audio(script, tier="premium")
+            # 3. Generate audio with selected or premium voice
+            audio_bytes = await self.audio_service.generate_audio(script, voice=voice, tier="premium")
             
             print(f"Generated audio: {len(audio_bytes)} bytes")
             

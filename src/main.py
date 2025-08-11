@@ -7,10 +7,18 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Debug: Check which TTS service is configured
+print("[Main] Environment check:")
+print(f"[Main] FISH_API_KEY present: {bool(os.getenv('FISH_API_KEY'))}")
+print(f"[Main] OPENAI_API_KEY present: {bool(os.getenv('OPENAI_API_KEY'))}")
+print(f"[Main] KOKORO_URL: {os.getenv('KOKORO_URL', 'Not set')}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("Starting up Market Brief API...")
+    print(f"[Main] Using OpenAI: {bool(os.getenv('OPENAI_API_KEY'))}")
+    print(f"[Main] Kokoro fallback available: {bool(os.getenv('KOKORO_URL'))}")
     yield
     # Shutdown
     print("Shutting down...")
@@ -41,9 +49,25 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
+    # Determine primary TTS service
+    if os.getenv("FISH_API_KEY"):
+        primary_service = "Fish Audio"
+    elif os.getenv("OPENAI_API_KEY"):
+        primary_service = "OpenAI"
+    elif os.getenv("KOKORO_URL"):
+        primary_service = "Kokoro"
+    else:
+        primary_service = "None configured"
+    
     return {
         "status": "healthy",
-        "environment": os.getenv("APP_ENV", "development")
+        "environment": os.getenv("APP_ENV", "development"),
+        "tts_config": {
+            "fish_configured": bool(os.getenv("FISH_API_KEY")),
+            "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+            "kokoro_configured": bool(os.getenv("KOKORO_URL")),
+            "primary_service": primary_service
+        }
     }
 
 from fastapi import BackgroundTasks
@@ -61,19 +85,20 @@ pipeline_service = PipelineService()
 # Request models
 class GenerateBriefingRequest(BaseModel):
     tickers: Optional[List[str]] = None
+    voice: Optional[str] = None  # OpenAI voice: alloy, echo, fable, onyx, nova, shimmer
 
 # Test endpoints for pipeline
 @app.post("/api/test/generate")
-async def test_generate():
+async def test_generate(voice: Optional[str] = None):
     """Test endpoint to generate a general market briefing"""
-    result = await pipeline_service.generate_general_briefing()
+    result = await pipeline_service.generate_general_briefing(voice=voice)
     return result
 
 @app.post("/api/test/generate-personalized")
 async def test_generate_personalized(request: GenerateBriefingRequest):
     """Test endpoint to generate a personalized briefing"""
     tickers = request.tickers or ["AAPL", "GOOGL", "TSLA"]
-    result = await pipeline_service.generate_personalized_briefing(tickers)
+    result = await pipeline_service.generate_personalized_briefing(tickers, voice=request.voice)
     return result
 
 @app.get("/api/test/audio/{file_id}")

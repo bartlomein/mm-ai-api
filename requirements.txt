@@ -5,6 +5,7 @@ python-dotenv
 supabase
 google-generativeai
 openai
+fish-audio-sdk
 stripe
 pydantic
 python-multipart
