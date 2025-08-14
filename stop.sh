@@ -5,7 +5,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}🛑 Stopping Market Brief API server...${NC}"
+echo -e "${YELLOW}🛑 Stopping MarketMotion API server...${NC}"
 
 # Find and kill the uvicorn process
 echo "Stopping API server..."

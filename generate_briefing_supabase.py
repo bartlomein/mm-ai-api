@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Enhanced briefing generator that ensures 5-minute length by generating sections separately
+Enhanced briefing generator with Supabase integration
+Generates 5-minute briefings and stores them in Supabase with proper access control
 """
 
 import asyncio
@@ -10,6 +11,10 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 import google.generativeai as genai
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src.services.supabase_service import get_supabase_service
 
 # Load environment variables
 load_dotenv()
@@ -18,11 +23,13 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Check TTS configuration
-print("🔧 TTS Configuration:")
+# Check configuration
+print("🔧 Configuration Check:")
+print(f"   Gemini API Key present: {bool(os.getenv('GEMINI_API_KEY'))}")
 print(f"   Fish Audio API Key present: {bool(os.getenv('FISH_API_KEY'))}")
 print(f"   Fish Model ID: {os.getenv('FISH_MODEL_ID', 'Not set (will use default)')}")
-print(f"   OpenAI API Key present: {bool(os.getenv('OPENAI_API_KEY'))}")
+print(f"   Supabase URL present: {bool(os.getenv('SUPABASE_URL'))}")
+print(f"   Supabase Key present: {bool(os.getenv('SUPABASE_ANON_KEY'))}")
 print("" + "=" * 50)
 
 async def fetch_articles():
@@ -207,8 +214,85 @@ def get_time_greeting():
     else:
         return "evening"
 
+def get_briefing_type():
+    """Determine briefing type based on time of day"""
+    hour = datetime.now().hour
+    if hour < 12:
+        return "morning"
+    elif hour < 17:
+        return "afternoon"
+    else:
+        return "evening"
+
+async def generate_audio(text, timestamp):
+    """Generate audio using Fish Audio and return bytes"""
+    print("\n🎵 Generating audio file...")
+    
+    audio_filename = f"briefing_{timestamp}.mp3"
+    audio_data = None
+    
+    fish_api_key = os.getenv("FISH_API_KEY")
+    if fish_api_key:
+        print("🐟 Using Fish Audio TTS...")
+        try:
+            from fish_audio_sdk import Session, TTSRequest
+            import io
+            
+            session = Session(fish_api_key)
+            
+            fish_model_id = os.getenv("FISH_MODEL_ID")
+            if fish_model_id:
+                print(f"   Using voice model: {fish_model_id}")
+                request = TTSRequest(
+                    text=text,
+                    reference_id=fish_model_id
+                )
+            else:
+                print("   Using default Fish Audio voice")
+                request = TTSRequest(text=text)
+            
+            audio_buffer = io.BytesIO()
+            chunk_count = 0
+            
+            print("   Generating audio...")
+            async for chunk in session.tts.awaitable(request):
+                audio_buffer.write(chunk)
+                chunk_count += 1
+                if chunk_count % 50 == 0:  # Print less frequently
+                    print(f"   Received {chunk_count} chunks...")
+            
+            audio_data = audio_buffer.getvalue()
+            
+            # Save locally as backup
+            with open(audio_filename, 'wb') as f:
+                f.write(audio_data)
+            
+            print(f"✅ Audio generated: {len(audio_data) / 1024:.1f} KB")
+            print(f"   Local backup saved: {audio_filename}")
+            
+            # Calculate approximate duration (rough estimate: ~16kbps for speech)
+            duration_seconds = int(len(audio_data) / 2000)
+            
+            return audio_data, duration_seconds, audio_filename
+            
+        except Exception as e:
+            print(f"❌ Fish Audio TTS failed: {str(e)}")
+            return None, None, None
+    else:
+        print("❌ No FISH_API_KEY found")
+        return None, None, None
+
 async def create_comprehensive_briefing():
-    """Create a 5-minute briefing by generating sections separately"""
+    """Create a 5-minute briefing and upload to Supabase"""
+    
+    # Initialize Supabase service
+    try:
+        supabase = get_supabase_service()
+        print("✅ Supabase service initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize Supabase: {e}")
+        print("   Continuing with local file generation only...")
+        supabase = None
     
     # Fetch articles
     articles = await fetch_articles()
@@ -222,7 +306,8 @@ async def create_comprehensive_briefing():
     sections = []
     
     # Opening
-    opening = f"Good {get_time_greeting()}. Here's your comprehensive market briefing for {datetime.now().strftime('%B %d')}."
+    time_greeting = get_time_greeting()
+    opening = f"Good {time_greeting}. Here's your comprehensive market briefing for {datetime.now().strftime('%B %d')}."
     sections.append(opening)
     print(f"   ✅ Opening: {len(opening.split())} words")
     
@@ -305,92 +390,89 @@ async def create_comprehensive_briefing():
     print(f"\n✅ Total briefing: {total_words} words")
     print(f"   Estimated duration: {total_words / 150:.1f} minutes")
     
-    if total_words < 700:
-        print("   ⚠️  Still too short! Adding market outlook...")
-        # Add an outlook section if still too short
-        outlook = generate_section(
-            articles,
-            "market outlook and what to watch for tomorrow",
-            150,
-            ['outlook', 'forecast', 'expect', 'tomorrow', 'week ahead']
-        )
-        if outlook:
-            briefing_text = briefing_text.replace(
-                "That concludes today's comprehensive market briefing.",
-                f"Finally, looking ahead. {outlook} That concludes today's comprehensive market briefing."
-            )
-            total_words = len(briefing_text.split())
-            print(f"   Final word count: {total_words} words")
-    
-    # Save to file
+    # Save text locally
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     text_filename = f"briefing_{timestamp}.txt"
     
     with open(text_filename, 'w', encoding='utf-8') as f:
         f.write(briefing_text)
     
-    print(f"\n✅ Text briefing saved to: {text_filename}")
+    print(f"\n✅ Text briefing saved locally: {text_filename}")
     print(f"   File size: {len(briefing_text)} characters")
-    print(f"   Word count: {total_words} words")
-    print(f"   Duration: {total_words / 150:.1f} minutes")
     
-    # Generate audio using Fish Audio
-    await generate_audio(briefing_text, timestamp)
-
-async def generate_audio(text, timestamp):
-    """Generate audio using Fish Audio"""
-    print("\n🎵 Generating audio file...")
+    # Generate audio
+    audio_data, duration_seconds, local_audio_file = await generate_audio(briefing_text, timestamp)
     
-    audio_filename = f"briefing_{timestamp}.mp3"
-    
-    fish_api_key = os.getenv("FISH_API_KEY")
-    if fish_api_key:
-        print("🐟 Using Fish Audio TTS...")
+    # Upload to Supabase if available
+    if supabase and audio_data:
         try:
-            from fish_audio_sdk import Session, TTSRequest
-            import io
+            print("\n☁️  Uploading to Supabase...")
             
-            session = Session(fish_api_key)
+            # Prepare metadata
+            now = datetime.now()
+            briefing_type = get_briefing_type()
             
-            fish_model_id = os.getenv("FISH_MODEL_ID")
-            if fish_model_id:
-                print(f"   Using voice model: {fish_model_id}")
-                request = TTSRequest(
-                    text=text,
-                    reference_id=fish_model_id
+            metadata = {
+                "generated_at": now.isoformat(),
+                "time_of_day": briefing_type,
+                "day_of_week": now.strftime("%A"),
+                "article_count": len(articles),
+                "sections": ["market_overview", "stocks", "economic", "tech", "energy", "international"],
+                "voice_model": os.getenv("FISH_MODEL_ID", "default")
+            }
+            
+            # Upload audio file
+            upload_result = await supabase.upload_briefing_audio(
+                file_content=audio_data,
+                filename=f"briefing_{briefing_type}_{timestamp}.mp3",
+                briefing_type=briefing_type,
+                date=now,
+                metadata=metadata
+            )
+            
+            if upload_result.get("success"):
+                print(f"✅ Audio uploaded to Supabase: {upload_result.get('path')}")
+                
+                # Save briefing metadata
+                title = f"{briefing_type.capitalize()} Market Briefing - {now.strftime('%B %d, %Y')}"
+                
+                save_result = await supabase.save_briefing_metadata(
+                    title=title,
+                    briefing_type=briefing_type,
+                    briefing_date=now,
+                    text_content=briefing_text,
+                    audio_file_path=upload_result.get("path"),
+                    word_count=total_words,
+                    duration_seconds=duration_seconds,
+                    metadata=metadata
                 )
+                
+                if save_result.get("success"):
+                    print(f"✅ Briefing metadata saved")
+                    print(f"   Briefing ID: {save_result.get('briefing_id')}")
+                    print(f"   Title: {title}")
+                    print(f"   Type: {briefing_type}")
+                    print(f"   Date: {now.strftime('%Y-%m-%d')}")
+                    print(f"   Access: Restricted to paid subscribers")
+                else:
+                    print(f"⚠️  Failed to save metadata: {save_result.get('error')}")
             else:
-                print("   Using default Fish Audio voice")
-                request = TTSRequest(text=text)
-            
-            audio_data = io.BytesIO()
-            chunk_count = 0
-            
-            print("   Generating audio...")
-            async for chunk in session.tts.awaitable(request):
-                audio_data.write(chunk)
-                chunk_count += 1
-                if chunk_count % 50 == 0:  # Print less frequently
-                    print(f"   Received {chunk_count} chunks...")
-            
-            with open(audio_filename, 'wb') as f:
-                f.write(audio_data.getvalue())
-            
-            print(f"✅ Audio file generated: {audio_filename}")
-            print(f"   File size: {len(audio_data.getvalue()) / 1024:.1f} KB")
-            
+                print(f"⚠️  Failed to upload audio: {upload_result.get('error')}")
+                
         except Exception as e:
-            print(f"❌ Fish Audio TTS failed: {str(e)}")
-    else:
-        print("❌ No FISH_API_KEY found")
+            print(f"⚠️  Supabase upload error: {e}")
+            print("   Files saved locally as backup")
     
     print("\n" + "=" * 50)
     print("✅ Briefing generation complete!")
-    print(f"📄 Text file: briefing_{timestamp}.txt")
-    print(f"🎵 Audio file: {audio_filename}")
+    print(f"📄 Text file: {text_filename}")
+    if local_audio_file:
+        print(f"🎵 Audio file: {local_audio_file}")
+    if supabase:
+        print("☁️  Available in Supabase for paid subscribers")
     print("=" * 50)
 
 if __name__ == "__main__":
-    print("🚀 MarketMotion Generator V2 - Comprehensive 5-Minute Briefings")
+    print("🚀 MarketMotion Generator with Supabase Integration")
     print("=" * 50)
     asyncio.run(create_comprehensive_briefing())

@@ -415,6 +415,6 @@ def get_time_greeting():
         return "evening"
 
 if __name__ == "__main__":
-    print("🚀 Market Brief Generator")
+    print("🚀 MarketMotion Generator")
     print("=" * 50)
     asyncio.run(fetch_and_create_briefing())

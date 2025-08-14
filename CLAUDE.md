@@ -1,15 +1,17 @@
-# Market Brief AI - Project Documentation
+# MarketMotion - Project Documentation
 
 ## Project Overview
-Market Brief AI is an automated financial news briefing system that generates 5-minute audio market updates using AI. It fetches financial news, creates intelligent summaries, and converts them to speech using advanced TTS services.
+MarketMotion is an automated financial news briefing system that generates 5-minute audio market updates using AI. It fetches financial news, creates intelligent summaries, and converts them to speech using advanced TTS services.
 
 ## Key Features
 - **Automated News Aggregation**: Fetches latest financial news from Finlight API
+- **Real-Time Market Data**: Integrates Financial Modeling Prep (FMP) for live market quotes, crypto, and indices
 - **AI-Powered Summarization**: Uses Google Gemini to create professional market briefings
 - **Text-to-Speech**: Converts briefings to audio using Fish Audio (primary) or OpenAI TTS (fallback)
 - **5-Minute Format**: Generates exactly 750-850 words for consistent 5-minute audio briefings
 - **Smart Deduplication**: Avoids repeating similar news stories
 - **Professional Formatting**: Properly formats stock tickers, numbers, and financial terms for TTS
+- **Investor-Focused Queries**: Answers common questions like "How is crypto doing?" or "What's SPY premarket?"
 
 ## Architecture
 
@@ -18,16 +20,86 @@ Market Brief AI is an automated financial news briefing system that generates 5-
 src/
 ├── services/
 │   ├── audio_service.py      # TTS generation (Fish Audio, OpenAI)
-│   ├── news_service.py        # Finlight API integration
-│   ├── summary_service.py     # Gemini AI summarization
-│   └── pipeline_service.py    # Orchestrates the full pipeline
+│   ├── news_service.py        # Finlight API integration for news articles
+│   ├── fmp_service.py         # Financial Modeling Prep API for market data
+│   ├── summary_service.py     # Gemini AI summarization and script generation
+│   ├── pipeline_service.py    # Orchestrates the full pipeline
+│   └── supabase_service.py    # Database integration (if configured)
 └── main.py                    # FastAPI application
 ```
 
+### Service Descriptions
+
+#### **audio_service.py**
+- Handles text-to-speech conversion
+- Primary: Fish Audio API (unlimited length, high quality)
+- Fallback: OpenAI TTS (4096 character limit)
+- Automatically selects best available service
+- Formats text for optimal TTS pronunciation
+- Estimates audio duration based on word count
+
+#### **news_service.py**
+- Integrates with Finlight API for financial news
+- Fetches general market news or ticker-specific articles
+- Returns structured article data with title, content, source, and date
+- Handles API errors gracefully with empty list fallbacks
+
+#### **fmp_service.py**
+- Real-time market data from Financial Modeling Prep API
+- **Key Methods:**
+  - `get_market_indices()` - SPY, QQQ, DIA, IWM, VTI quotes
+  - `get_premarket_data()` - Pre-market trading activity
+  - `get_crypto_overview()` - Bitcoin, Ethereum, major crypto performance
+  - `get_market_movers()` - Top gainers, losers, most active stocks
+  - `get_sector_performance()` - Sector rotation analysis
+  - `get_intraday_performance()` - Historical price action (5min/1min intervals)
+  - `get_economic_calendar()` - Upcoming economic events
+  - `generate_market_briefing()` - Combined market narrative
+- Normalizes data for LLM consumption with summaries
+- Handles market sentiment analysis
+
+#### **summary_service.py**
+- Uses Google Gemini 2.0 Flash for AI summarization
+- Creates professional market briefings from news and data
+- **Key Methods:**
+  - `create_general_script()` - Free tier general market summary
+  - `create_personalized_script()` - Premium tier with specific tickers
+  - `create_market_data_script()` - Combines FMP data with news context
+- Enforces 750-850 word count for 5-minute audio
+- Applies TTS formatting rules automatically
+- Includes retry logic for proper word count
+
+#### **pipeline_service.py**
+- Orchestrates multi-service workflows
+- **Key Methods:**
+  - `generate_general_briefing()` - News-based briefing for free tier
+  - `generate_personalized_briefing()` - Ticker-specific for premium tier
+  - `generate_market_data_briefing()` - FMP data + news combination
+  - `generate_intraday_update()` - Symbol-specific performance updates
+- Handles file storage and audio generation
+- Returns structured responses with metadata
+
+#### **supabase_service.py** (if configured)
+- Database operations for user data and briefings
+- Stores generated audio files
+- Manages user preferences and subscription tiers
+
 ### Scripts
+
+#### News-Based Briefings
 - `generate_briefing_v2.py` - Main script for generating 5-minute briefings (RECOMMENDED)
 - `generate_briefing.py` - Original briefing generator
+- `generate_free_briefing.py` - Free tier briefing generator
+- `generate_morning_premium_briefing.py` - Premium morning briefing
+
+#### Market Data Briefings (FMP)
+- `generate_market_data_briefing.py` - Comprehensive market overview with real-time data
+- `generate_crypto_briefing.py` - Crypto market analysis ("How is crypto doing?")
+- `generate_spy_premarket.py` - SPY premarket activity briefing
+
+#### Testing Scripts
 - `test_pipeline.py` - Tests the full pipeline
+- `test_fmp_service.py` - Tests all FMP service methods
 - `list_fish_models.py` - Lists available Fish Audio voice models
 - `test_fish_voices.py` - Tests different TTS voices
 
@@ -35,8 +107,9 @@ src/
 
 ### Environment Variables (.env)
 ```bash
-# News Data
+# News & Market Data
 FINLIGHT_API_KEY=xxx           # Required: Financial news API
+FMP_API_KEY=xxx                # Required: Financial Modeling Prep for market data
 
 # AI/LLM
 GEMINI_API_KEY=xxx             # Required: Google Gemini for summarization
@@ -59,9 +132,11 @@ SUPABASE_ANON_KEY=xxx
 
 ## Usage
 
-### Generate a 5-Minute Market Briefing
+### Generate Different Types of Briefings
+
+#### News-Based Briefing (Original)
 ```bash
-# Recommended: Use v2 for proper 5-minute briefings
+# Generate 5-minute news briefing
 ./generate_briefing_v2.py
 
 # This will:
@@ -69,6 +144,28 @@ SUPABASE_ANON_KEY=xxx
 # 2. Generate 800-word briefing in sections
 # 3. Create audio file using Fish Audio
 # 4. Save both text and audio files
+```
+
+#### Market Data Briefing (Real-Time)
+```bash
+# Generate comprehensive market overview
+./generate_market_data_briefing.py
+
+# This combines:
+# - Real-time indices (SPY, QQQ, DIA)
+# - Crypto performance
+# - Market movers
+# - Sector rotation
+# - Economic calendar
+```
+
+#### Specific Market Queries
+```bash
+# "How is crypto doing?"
+./generate_crypto_briefing.py
+
+# "How is SPY doing premarket?"
+./generate_spy_premarket.py
 ```
 
 ### Start the API Server
@@ -148,6 +245,9 @@ pip install -r requirements.txt
 # Test Finlight API
 python test_finlight.py
 
+# Test FMP Service (market data)
+python test_fmp_service.py
+
 # Test full pipeline
 python test_pipeline.py
 
@@ -209,13 +309,17 @@ The system provides detailed logging:
 - `[AudioService]` - TTS service selection and generation
 - `[SummaryService]` - AI summarization process
 - `[NewsService]` - API data fetching
+- `[FMPService]` - Market data retrieval and normalization
+- `[PipelineService]` - Orchestration and workflow execution
 - `[Main]` - Application startup and configuration
 
 ### Common Error Messages
 - `"FINLIGHT_API_KEY not found"` - Set the API key in .env
+- `"FMP_API_KEY not found"` - Set the Financial Modeling Prep API key in .env
 - `"Text too long for OpenAI TTS"` - Text exceeds 4096 chars, will use Fish Audio
 - `"No TTS service configured"` - Set at least one TTS API key
 - `"Generated only X words"` - Gemini didn't follow word count, will retry
+- `"No premarket data available"` - Markets are likely open, premarket data not available
 
 ## Best Practices
 
@@ -229,12 +333,16 @@ The system provides detailed logging:
 
 - **Fish Audio Docs**: https://docs.fish.audio
 - **Finlight API**: https://finlight.me
+- **Financial Modeling Prep API**: https://site.financialmodelingprep.com/developer/docs
 - **Google Gemini**: https://ai.google.dev
 - **OpenAI TTS**: https://platform.openai.com/docs/guides/text-to-speech
 
 ## Version History
 
-### Current Version: 2.0
+### Current Version: 2.1
+- **NEW: Financial Modeling Prep (FMP) integration for real-time market data**
+- **NEW: Investor-focused queries (crypto, premarket, intraday tracking)**
+- **NEW: Combined market data + news briefings**
 - Generates proper 5-minute briefings (750-850 words)
 - Includes article deduplication
 - Supports Fish Audio as primary TTS
@@ -250,5 +358,5 @@ The system provides detailed logging:
 
 ---
 
-*Last Updated: August 2024*
-*Project: Market Brief AI - Automated Financial News Briefings*
+*Last Updated: August 2025*
+*Project: MarketMotion - Automated Financial News & Market Data Briefings*

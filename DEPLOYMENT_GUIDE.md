@@ -1,4 +1,4 @@
-# Deployment Guide - Market Brief AI
+# Deployment Guide - MarketMotion
 
 ## Quick Start Deployment to Render
 

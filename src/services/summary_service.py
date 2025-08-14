@@ -7,7 +7,8 @@ class SummaryService:
     def __init__(self):
         # Configure Gemini
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # Use Gemini 2.0 Flash for better performance and higher rate limits
+        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
         
     def _get_time_greeting(self) -> str:
         """Get appropriate time-based greeting"""
@@ -307,3 +308,73 @@ class SummaryService:
             return f"{greeting}We're having trouble fetching the latest news for {tickers_str}. Please try again in a few moments."
         else:
             return f"{greeting}We're having trouble fetching the latest market news. Please try again in a few moments."
+    
+    async def create_market_data_script(self, articles: List[Dict], enhanced_prompt: str) -> str:
+        """
+        Create a script combining real-time market data with news context
+        Used with FMP service data
+        """
+        try:
+            # Prepare article context if available
+            article_context = ""
+            if articles:
+                article_summaries = []
+                for article in articles[:10]:
+                    title = article.get('title', 'No title')
+                    content = article.get('content', '')[:500]
+                    if content:
+                        article_summaries.append(f"- {title}: {content[:200]}...")
+                
+                article_context = "\n".join(article_summaries)
+            
+            # Combine enhanced prompt with article context
+            full_prompt = enhanced_prompt
+            if article_context:
+                full_prompt += f"\n\nRECENT NEWS HEADLINES:\n{article_context}"
+            
+            # Add TTS formatting rules
+            full_prompt += """
+            
+            CRITICAL FORMATTING RULES FOR TEXT-TO-SPEECH:
+            1. Stock tickers MUST be formatted as: "ticker A-A-P-L --" (spell out each letter with dashes, then pause)
+            2. Percentages: Write out as "twenty-five percent" not "25%"
+            3. Currency: "$1.5B" becomes "one point five billion dollars"
+            4. Large numbers: "2,500,000" becomes "two point five million"
+            5. Abbreviations: "CEO" becomes "C-E-O", "IPO" becomes "I-P-O", "S&P" becomes "S and P"
+            
+            Structure:
+            - Opening greeting with date (20 words)
+            - Market indices overview (150 words)
+            - Individual stock movements (150 words)
+            - Sector performance (120 words)
+            - Crypto market update (100 words)
+            - Economic events/outlook (100 words)
+            - Market sentiment and closing (110 words)
+            
+            TOTAL: 750-850 words for 5-minute audio at 150 words per minute
+            """
+            
+            generation_config = {
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "max_output_tokens": 2048,
+            }
+            
+            response = self.model.generate_content(
+                full_prompt,
+                generation_config=generation_config
+            )
+            
+            result = response.text.strip()
+            
+            # Check word count
+            word_count = len(result.split())
+            if word_count < 700:
+                print(f"[SummaryService] WARNING: Generated only {word_count} words for market data script")
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error generating market data script: {str(e)}")
+            # Return the enhanced prompt as fallback
+            return enhanced_prompt

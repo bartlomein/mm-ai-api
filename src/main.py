@@ -15,7 +15,7 @@ print(f"[Main] OPENAI_API_KEY present: {bool(os.getenv('OPENAI_API_KEY'))}")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print("Starting up Market Brief API...")
+    print("Starting up MarketMotion API...")
     print(f"[Main] Fish Audio configured: {bool(os.getenv('FISH_API_KEY'))}")
     print(f"[Main] OpenAI configured: {bool(os.getenv('OPENAI_API_KEY'))}")
     yield
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     print("Shutting down...")
 
 app = FastAPI(
-    title="Market Brief API",
+    title="MarketMotion API",
     description="AI-powered financial news audio briefings",
     version="1.0.0",
     lifespan=lifespan

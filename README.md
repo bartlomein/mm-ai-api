@@ -1,4 +1,4 @@
-# Market Brief API - Backend
+# MarketMotion API - Backend
 
 AI-powered financial news audio briefings for mobile.
 

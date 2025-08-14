@@ -1,4 +1,4 @@
-# Project Status - Market Brief AI
+# Project Status - MarketMotion
 *Last Updated: August 11, 2024*
 
 ## 🎯 What We Accomplished Today
@@ -206,7 +206,7 @@ curl http://localhost:8000/api/health
 ## 📝 For Next Session
 
 When you restart Claude, tell it:
-1. "Continue working on Market Brief AI deployment to Render"
+1. "Continue working on MarketMotion deployment to Render"
 2. "The 5-minute briefing generation is working with generate_briefing_v2.py"
 3. "Fish Audio is configured with model ID 56431e329b21489c9f9f7ab9c77312d4"
 4. "Check PROJECT_STATUS.md for current status"
