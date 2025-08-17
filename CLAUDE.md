@@ -1,17 +1,18 @@
 # MarketMotion - Project Documentation
 
 ## Project Overview
-MarketMotion is an automated financial news briefing system that generates 5-minute audio market updates using AI. It fetches financial news, creates intelligent summaries, and converts them to speech using advanced TTS services.
+MarketMotion is an automated financial news briefing system that generates premium audio market updates using AI. It provides comprehensive morning, midday, and evening briefings plus free-tier options, fetching multi-source financial news and creating intelligent summaries with advanced TTS services.
 
 ## Key Features
 - **Multi-Source News Aggregation**: Fetches financial news from Finlight API and NewsAPI.ai
 - **Real-Time Market Data**: Integrates Financial Modeling Prep (FMP) for live market quotes, crypto, and indices
 - **AI-Powered Summarization**: Uses Google Gemini to create professional market briefings
 - **Text-to-Speech**: Converts briefings to audio using Fish Audio (primary) or OpenAI TTS (fallback)
-- **5-Minute Format**: Generates exactly 750-850 words for consistent 5-minute audio briefings
+- **Multiple Briefing Types**: Morning (12-15 min), Midday (live trading), Evening (10-15 min), and Free tier
+- **EST Timezone Support**: All briefings use consistent Eastern Time for US market alignment
 - **Smart Deduplication**: Avoids repeating similar news stories
 - **Professional Formatting**: Properly formats stock tickers, numbers, and financial terms for TTS
-- **Investor-Focused Queries**: Answers common questions like "How is crypto doing?" or "What's SPY premarket?"
+- **Weekend Detection**: Automatically adjusts messaging based on market hours
 
 ## Architecture
 
@@ -26,6 +27,8 @@ src/
 │   ├── summary_service.py     # Gemini AI summarization and script generation
 │   ├── pipeline_service.py    # Orchestrates the full pipeline
 │   └── supabase_service.py    # Database integration (if configured)
+├── utils/
+│   └── timezone_utils.py     # EST timezone utilities for consistent market time
 └── main.py                    # FastAPI application
 ```
 
@@ -115,18 +118,27 @@ src/
 - Stores generated audio files
 - Manages user preferences and subscription tiers
 
+#### **timezone_utils.py** (NEW)
+- **EST Timezone Support**: Ensures all briefings use Eastern Time consistently
+- **Key Functions**:
+  - `get_est_time()` - Current time in EST/EDT
+  - `is_weekend_est()` - Weekend detection based on US market hours
+  - `get_est_weekday_name()` - Day name in Eastern Time
+  - `format_est_timestamp()` - EST timestamps for file naming
+  - `format_est_display()` - EST display formatting
+- **Critical for US Markets**: Proper market hours detection regardless of server location
+
 ### Scripts
 
-#### News-Based Briefings
-- `generate_briefing_v2.py` - Main script for generating 5-minute briefings (RECOMMENDED)
-- `generate_briefing.py` - Original briefing generator
-- `generate_free_briefing.py` - Free tier briefing generator
-- `generate_morning_premium_briefing.py` - Premium morning briefing
+#### Premium Briefing Generators (MAIN)
+- `generate_premium_morning_briefing.py` - **Morning briefing** (12-15 min): Economic calendar, premarket data, comprehensive news
+- `generate_premium_midday_briefing.py` - **Midday briefing** (live trading): Real-time market data, trading activity, sector performance  
+- `generate_premium_evening_briefing.py` - **Evening briefing** (10-15 min): Full day recap, comprehensive market analysis
+- `generate_free_briefing.py` - **Free tier briefing**: Shorter briefings for non-premium users
 
-#### Market Data Briefings (FMP)
-- `generate_market_data_briefing.py` - Comprehensive market overview with real-time data
-- `generate_crypto_briefing.py` - Crypto market analysis ("How is crypto doing?")
+#### Market Data & Analysis Scripts
 - `generate_spy_premarket.py` - SPY premarket activity briefing
+- `generate_weekly_economic_calendar.py` - Generate economic calendar briefings
 
 #### NewsAPI.ai Scripts
 - `search_news_topic.py` - Search for news on any topic with flexible time filtering
@@ -171,40 +183,63 @@ SUPABASE_ANON_KEY=xxx
 
 ## Usage
 
-### Generate Different Types of Briefings
+### Generate Premium Briefings
 
-#### News-Based Briefing (Original)
+#### Morning Briefing (12-15 minutes)
 ```bash
-# Generate 5-minute news briefing
-./generate_briefing_v2.py
+# Generate premium morning briefing with economic calendar
+./generate_premium_morning_briefing.py
 
-# This will:
-# 1. Fetch 100+ articles from Finlight
-# 2. Generate 800-word briefing in sections
-# 3. Create audio file using Fish Audio
-# 4. Save both text and audio files
+# Features:
+# - Economic calendar (today + upcoming)
+# - Premarket data and futures
+# - Comprehensive news from multiple sources
+# - Crypto overnight moves
+# - International markets (Asian close, European open)
 ```
 
-#### Market Data Briefing (Real-Time)
+#### Midday Briefing (Live Trading Focus)
 ```bash
-# Generate comprehensive market overview
-./generate_market_data_briefing.py
+# Generate real-time market update during trading hours
+./generate_premium_midday_briefing.py
 
-# This combines:
-# - Real-time indices (SPY, QQQ, DIA)
-# - Crypto performance
-# - Market movers
-# - Sector rotation
-# - Economic calendar
+# Features:
+# - Live market data and indices
+# - Market movers and sector performance
+# - Real-time trading activity
+# - Breaking news and developments
+```
+
+#### Evening Briefing (10-15 minutes)
+```bash
+# Generate comprehensive end-of-day market recap
+./generate_premium_evening_briefing.py
+
+# Features:
+# - Full day trading recap
+# - Daily market performance analysis
+# - Comprehensive news from last 18 hours
+# - Sector analysis and market highlights
+```
+
+#### Free Tier Briefing
+```bash
+# Generate shorter briefing for free tier users
+./generate_free_briefing.py
+
+# Features:
+# - Shorter format
+# - Essential market updates
+# - Basic news coverage
 ```
 
 #### Specific Market Queries
 ```bash
-# "How is crypto doing?"
-./generate_crypto_briefing.py
-
-# "How is SPY doing premarket?"
+# SPY premarket analysis
 ./generate_spy_premarket.py
+
+# Weekly economic calendar
+./generate_weekly_economic_calendar.py
 ```
 
 #### NewsAPI.ai Topic Search
@@ -387,11 +422,21 @@ The system provides detailed logging:
 
 ## Best Practices
 
-1. **Always use `generate_briefing_v2.py`** for consistent 5-minute briefings
-2. **Set `FISH_MODEL_ID`** in .env for consistent voice
-3. **Monitor word counts** in output to ensure proper length
-4. **Check for duplicate content** in generated briefings
-5. **Verify TTS formatting** in text files before audio generation
+1. **Use the appropriate premium briefing generator**:
+   - Morning: `./generate_premium_morning_briefing.py` (pre-market prep)
+   - Midday: `./generate_premium_midday_briefing.py` (live trading)
+   - Evening: `./generate_premium_evening_briefing.py` (day recap)
+   - Free: `./generate_free_briefing.py` (basic tier)
+
+2. **Set `FISH_MODEL_ID`** in .env for consistent voice across all briefings
+
+3. **All scripts automatically use EST timezone** - no manual timezone handling needed
+
+4. **NewsAPI.ai limits**: Stay within 100 articles per request (automatically handled)
+
+5. **Monitor word counts** in output to ensure proper briefing length
+
+6. **Weekend detection**: Scripts automatically detect weekends and adjust messaging
 
 ## Support and Resources
 
@@ -402,23 +447,40 @@ The system provides detailed logging:
 - **Google Gemini**: https://ai.google.dev
 - **OpenAI TTS**: https://platform.openai.com/docs/guides/text-to-speech
 
+## EST Timezone Support
+
+All briefing generators now use **consistent Eastern Time (EST/EDT)** for:
+- **Weekend Detection**: Proper market hours recognition
+- **Date Calculations**: News search ranges and time filtering
+- **Timestamps**: File naming and briefing headers
+- **Market Context**: Weekday vs weekend messaging
+
+### Timezone Utilities (`src/utils/timezone_utils.py`)
+```python
+get_est_time()          # Current EST time
+is_weekend_est()        # Weekend detection in EST
+get_est_weekday_name()  # Day name in EST
+format_est_timestamp()  # EST timestamps for files
+format_est_display()    # EST display formatting
+```
+
+This ensures all briefings are **aligned with US financial markets** regardless of server location.
+
 ## Version History
 
-### Current Version: 2.2
-- **NEW: Enhanced NewsAPI.ai integration with comprehensive documentation**
-- **NEW: Topic search script with full content retrieval (no truncation)**
-- **NEW: Precise datetime filtering for time-based searches**
-- **NEW: Clear article boundaries in search output**
+### Current Version: 3.0 (August 2025)
+- **🚀 MAJOR REFACTORING**: Cleaned up codebase from 12 → 4 briefing generators
+- **🕐 EST Timezone Support**: All briefings use consistent Eastern Time
+- **📱 Premium Briefing Types**: Morning (12-15min), Midday (live), Evening (10-15min), Free tier
+- **🔧 Fixed NewsAPI.ai Integration**: Resolved 100-article API limit issue
+- **🧹 Clean Repository**: Added comprehensive .gitignore for generated files
+- **✅ Weekend Detection**: Smart messaging that avoids "trading day" on weekends
+- Enhanced NewsAPI.ai integration with comprehensive documentation
+- Topic search script with full content retrieval (no truncation)
+- Precise datetime filtering for time-based searches
 - Financial Modeling Prep (FMP) integration for real-time market data
-- Investor-focused queries (crypto, premarket, intraday tracking)
-- Combined market data + news briefings
 - Multi-source news aggregation (Finlight + NewsAPI.ai)
-- Sentiment analysis and concept extraction
-- Generates proper 5-minute briefings (750-850 words)
-- Includes article deduplication
-- Supports Fish Audio as primary TTS
-- Professional TTS formatting
-- Section-by-section generation for consistency
+- Professional TTS formatting and section-by-section generation
 
 ### Previous Issues (Now Fixed)
 - ✅ Briefings were too short (45 seconds instead of 5 minutes)
@@ -426,6 +488,10 @@ The system provides detailed logging:
 - ✅ Stock tickers weren't pronounced correctly
 - ✅ Numbers and percentages formatted incorrectly
 - ✅ Voice changed between generations
+- ✅ Evening briefing getting 0 articles (NewsAPI.ai 100-article limit exceeded)
+- ✅ Inconsistent timezone usage across briefing generators
+- ✅ "Wrapping up trading day" said on weekends
+- ✅ Repository cluttered with 12 different briefing scripts
 
 ---
 
