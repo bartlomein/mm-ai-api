@@ -38,6 +38,7 @@ from src.services.newsapiai_service import NewsAPIAIService
 from src.services.news_service import NewsService
 from src.services.summary_service import SummaryService
 from src.services.audio_service import AudioService
+from src.utils.timezone_utils import get_est_time, is_weekend_est, get_est_weekday_name, format_est_timestamp, format_est_display
 
 class PremiumMiddayBriefingV2:
     """Orchestrates the generation of premium midday briefings."""
@@ -55,8 +56,7 @@ class PremiumMiddayBriefingV2:
         print("\n📊 Fetching comprehensive trading data...")
         
         # Check if it's a weekend (Saturday = 5, Sunday = 6)
-        current_day = datetime.now().weekday()
-        is_weekend = current_day in [5, 6]
+        is_weekend = is_weekend_est()
         
         trading_data = {}
         
@@ -107,7 +107,7 @@ class PremiumMiddayBriefingV2:
         from datetime import datetime, timedelta
         
         # Calculate date range for last 8 hours
-        end_date = datetime.now()
+        end_date = get_est_time()
         start_date = end_date - timedelta(hours=hours_back)
         
         # First try with date range
@@ -205,7 +205,7 @@ class PremiumMiddayBriefingV2:
             "usa_news": usa_news,
             "finance_news": finance_news,
             "tech_news": tech_news,
-            "fetch_time": datetime.now().isoformat()
+            "fetch_time": get_est_time().isoformat()
         }
     
     def select_top_stories(self, all_data: Dict[str, Any]) -> Dict[str, List[Dict]]:
@@ -254,7 +254,7 @@ class PremiumMiddayBriefingV2:
         briefing_parts = []
         
         # Header
-        current_time = datetime.now()
+        current_time = get_est_time()
         briefing_parts.append(f"PREMIUM MIDDAY MARKET BRIEFING")
         briefing_parts.append(f"Generated: {current_time.strftime('%B %d, %Y at %I:%M %p ET')}")
         briefing_parts.append("=" * 80)
@@ -499,7 +499,7 @@ class PremiumMiddayBriefingV2:
         
         # Get the current day name for closing
         day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        current_day = day_names[datetime.now().weekday()]
+        current_day = get_est_weekday_name()
         
         # Create prompt for Gemini
         prompt = f"""
@@ -507,9 +507,9 @@ class PremiumMiddayBriefingV2:
         
         TASK: Analyze the following {len(all_articles)} news articles and create a 10-minute professional midday briefing.
         
-        Current Date: {datetime.now().strftime('%B %d, %Y')}
+        Current Date: {get_est_time().strftime('%B %d, %Y')}
         Current Time: Midday
-        Market Status: {'Weekend - Markets Closed' if datetime.now().weekday() in [5, 6] else 'Weekday - Markets Open'}
+        Market Status: {'Weekend - Markets Closed' if is_weekend_est() else 'Weekday - Markets Open'}
         
         CURRENT TRADING DATA:
         {trading_summary}
@@ -660,7 +660,7 @@ class PremiumMiddayBriefingV2:
         gemini_briefing = await self.summarize_and_select_articles(all_data, selected_stories)
         
         # Step 4: Combine raw data and Gemini summary
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = format_est_timestamp()
         
         # Save raw data file
         raw_filename = f"premium_midday_raw_data_{timestamp}.txt"

@@ -38,6 +38,7 @@ from src.services.newsapiai_service import NewsAPIAIService
 from src.services.news_service import NewsService
 from src.services.summary_service import SummaryService
 from src.services.audio_service import AudioService
+from src.utils.timezone_utils import get_est_time, is_weekend_est, get_est_weekday_name, format_est_timestamp, format_est_display
 
 class PremiumEveningBriefingV2:
     """Orchestrates the generation of premium evening briefings."""
@@ -54,9 +55,8 @@ class PremiumEveningBriefingV2:
         """Fetch comprehensive daily trading data - full day recap for evening briefing."""
         print("\n📊 Fetching comprehensive daily trading data...")
         
-        # Check if it's a weekend (Saturday = 5, Sunday = 6)
-        current_day = datetime.now().weekday()
-        is_weekend = current_day in [5, 6]
+        # Check if it's a weekend in EST (Saturday = 5, Sunday = 6)
+        is_weekend = is_weekend_est()
         
         trading_data = {}
         
@@ -109,8 +109,8 @@ class PremiumEveningBriefingV2:
         # Try to use date-based search without complex keywords
         from datetime import datetime, timedelta
         
-        # Calculate date range for last 18 hours
-        end_date = datetime.now()
+        # Calculate date range for last 18 hours in EST
+        end_date = get_est_time()
         start_date = end_date - timedelta(hours=hours_back)
         
         # First try with date range
@@ -219,7 +219,7 @@ class PremiumEveningBriefingV2:
             "usa_news": usa_news,
             "finance_news": finance_news,
             "tech_news": tech_news,
-            "fetch_time": datetime.now().isoformat()
+            "fetch_time": get_est_time().isoformat()
         }
     
     def select_top_stories(self, all_data: Dict[str, Any]) -> Dict[str, List[Dict]]:
@@ -268,9 +268,8 @@ class PremiumEveningBriefingV2:
         briefing_parts = []
         
         # Header
-        current_time = datetime.now()
         briefing_parts.append(f"PREMIUM EVENING MARKET BRIEFING")
-        briefing_parts.append(f"Generated: {current_time.strftime('%B %d, %Y at %I:%M %p ET')}")
+        briefing_parts.append(f"Generated: {format_est_display()}")
         briefing_parts.append("=" * 80)
         
         # Section 1: Daily Trading Recap (ENHANCED for evening)
@@ -526,9 +525,8 @@ class PremiumEveningBriefingV2:
                     pct = item.get("changePercent", 0)
                     trading_summary += f"  {symbol}: ${price:,.2f} ({pct:+.2f}%)\n"
         
-        # Get the current day name for closing
-        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        current_day = day_names[datetime.now().weekday()]
+        # Get the current day name for closing (EST)
+        current_day = get_est_weekday_name()
         
         # Create prompt for Gemini
         prompt = f"""
@@ -536,9 +534,9 @@ class PremiumEveningBriefingV2:
         
         TASK: Analyze the following {len(all_articles)} news articles and create a 15-minute professional evening briefing.
         
-        Current Date: {datetime.now().strftime('%B %d, %Y')}
+        Current Date: {get_est_time().strftime('%B %d, %Y')}
         Current Time: Evening wrap-up
-        Market Status: {'Weekend - Markets Closed' if datetime.now().weekday() in [5, 6] else 'Weekday - Markets Closed'}
+        Market Status: {'Weekend - Markets Closed' if is_weekend_est() else 'Weekday - Markets Closed'}
         
         DAILY TRADING RECAP:
         {trading_summary}
@@ -692,7 +690,7 @@ class PremiumEveningBriefingV2:
         gemini_briefing = await self.summarize_and_select_articles(all_data, selected_stories)
         
         # Step 4: Combine raw data and Gemini summary
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = format_est_timestamp()
         
         # Save raw data file
         raw_filename = f"premium_evening_raw_data_{timestamp}.txt"
