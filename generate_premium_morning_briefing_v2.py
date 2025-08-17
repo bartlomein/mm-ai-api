@@ -50,35 +50,78 @@ class PremiumMorningBriefingV2:
         self.audio_service = AudioService()
         
     async def fetch_economic_calendar(self) -> Dict[str, Any]:
-        """Fetch today's economic calendar events from FMP."""
+        """Fetch economic calendar events for next 3 business days."""
         print("\n📅 Fetching economic calendar...")
         
-        # Get today and this week's events
-        today = datetime.now().strftime("%Y-%m-%d")
-        week_end = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+        # Always get next 3 business days from today
+        now = datetime.now()
+        current_date = now
+        business_days = []
+        
+        # Collect next 3 business days
+        while len(business_days) < 3:
+            # Skip weekends (Saturday=5, Sunday=6)
+            if current_date.weekday() < 5:
+                business_days.append(current_date)
+            current_date += timedelta(days=1)
+        
+        start_date_str = business_days[0].strftime("%Y-%m-%d")
+        end_date_str = business_days[-1].strftime("%Y-%m-%d")
+        
+        print(f"   📆 Fetching events from {start_date_str} to {end_date_str} (next 3 business days)")
         
         calendar_data = await self.fmp_service.get_economic_calendar(
-            from_date=today,
-            to_date=week_end,
-            country="US"  # Focus on US events for morning briefing
+            start_date_str,  # Use positional arguments like the working script
+            end_date_str     # Use positional arguments like the working script
         )
         
-        # Separate today's events from the week
-        today_events = []
-        week_events = []
+        # Organize events by day and filter for high impact
+        events_by_day = {}
+        high_impact_events = []
         
         if calendar_data and "events" in calendar_data:
             for event in calendar_data["events"]:
-                event_date = event.get("date", "").split("T")[0]
-                if event_date == today:
-                    today_events.append(event)
-                else:
-                    week_events.append(event)
+                # Filter for HIGH impact events only
+                if event.get("impact") == "High":
+                    # Extract just the date part, handle both "T" and space separators
+                    full_date_str = event.get("date", "")
+                    if "T" in full_date_str:
+                        event_date_str = full_date_str.split("T")[0]
+                    elif " " in full_date_str:
+                        event_date_str = full_date_str.split(" ")[0]
+                    else:
+                        event_date_str = full_date_str
+                    
+                    # Parse date and get day name  
+                    try:
+                        # Parse the date (should be in format YYYY-MM-DD now)
+                        event_date = datetime.strptime(event_date_str, "%Y-%m-%d")
+                        day_name = event_date.strftime("%A")
+                        
+                        if event_date_str not in events_by_day:
+                            events_by_day[event_date_str] = {
+                                "day_name": day_name,
+                                "date": event_date_str,
+                                "events": []
+                            }
+                        
+                        events_by_day[event_date_str]["events"].append(event)
+                        high_impact_events.append(event)
+                    except:
+                        pass
+        
+        # Create summary of high impact events
+        summary = ""
+        if high_impact_events:
+            summary = f"Found {len(high_impact_events)} major economic events"
+        else:
+            summary = "No major economic events scheduled"
         
         return {
-            "today": today_events,
-            "week": week_events,
-            "summary": calendar_data.get("summary", "") if calendar_data else "No economic events scheduled."
+            "events_by_day": events_by_day,
+            "high_impact_events": high_impact_events,
+            "date_range": f"{start_date} to {end_date}",
+            "summary": summary
         }
     
     async def fetch_premarket_data(self) -> Dict[str, Any]:
@@ -464,6 +507,26 @@ class PremiumMorningBriefingV2:
         crypto = premarket.get("crypto", {})
         crypto_summary = crypto.get("summary", "") if crypto else ""
         
+        # Get economic calendar data
+        calendar = all_data.get("economic_calendar", {})
+        events_by_day = calendar.get("events_by_day", {})
+        
+        # Format economic calendar for prompt
+        calendar_text = ""
+        if events_by_day:
+            calendar_text = "UPCOMING ECONOMIC EVENTS (Next 5 Business Days):\n"
+            for date_str, day_data in sorted(events_by_day.items()):
+                day_name = day_data["day_name"]
+                events = day_data["events"]
+                calendar_text += f"\n{day_name}, {date_str}:\n"
+                for event in events[:5]:  # Limit to 5 events per day
+                    time = event.get("date", "").split("T")[1][:5] if "T" in event.get("date", "") else "TBD"
+                    calendar_text += f"  - {time} ET: {event.get('event', 'Unknown')} (Impact: {event.get('impact', 'Unknown')})\n"
+                    if event.get("previous") or event.get("estimate"):
+                        calendar_text += f"    Previous: {event.get('previous', 'N/A')} | Estimate: {event.get('estimate', 'N/A')}\n"
+        else:
+            calendar_text = "No significant economic events in the next 5 business days."
+        
         # Get the current day name for closing
         day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         current_day = day_names[datetime.now().weekday()]
@@ -477,6 +540,8 @@ class PremiumMorningBriefingV2:
         Current Date: {datetime.now().strftime('%B %d, %Y')}
         Market Status: {'Weekend - Markets Closed' if datetime.now().weekday() in [5, 6] else 'Weekday'}
         Crypto Overview: {crypto_summary}
+        
+        {calendar_text}
         
         ARTICLES TO ANALYZE:
         {articles_text}
@@ -494,7 +559,7 @@ class PremiumMorningBriefingV2:
            START WITH: "Welcome to your MarketMotion Daily briefing. It's [date], and [market status]. [crypto overview if relevant - use periods to separate crypto prices, not pipes]"
            Example opening: "Welcome to your MarketMotion Daily briefing. It's August seventeenth, and markets are closed for the weekend. Bitcoin is at one hundred eighteen thousand dollars, up point eight percent. Ethereum is at four thousand five hundred dollars, up three percent."
            
-           Then say "Top stories..." and provide 3-4 most critical developments (400 words total)
+           Then say "Top stories..." and provide 3-4 most critical developments (350 words total)
            
            Then say "Market movers..." and cover key financial/economic news (300 words)
            
@@ -504,14 +569,19 @@ class PremiumMorningBriefingV2:
            
            Then say "Sector highlights..." and cover other sectors (200 words)
            
+           Then say "Economic calendar for the week ahead..." and briefly mention the HIGH-IMPACT economic events for the next 3 business days (150 words)
+           - Focus ONLY on high-impact events like Fed meetings, CPI, jobs reports, GDP
+           - Format: "On [day], we have [event] at [time]. Previous was [X], market expects [Y]."
+           - If no high-impact events, say "No major economic releases scheduled for the next few days."
+           
            End with: "That concludes your MarketMotion Daily briefing. Have a great {current_day}!"
         
         CRITICAL FORMATTING RULES:
         - NO ASTERISKS anywhere in the text
         - NO BOLD formatting (no ** or *)
         - NO section headers in brackets or capitals
-        - Use ellipses (...) instead of colons for section transitions: "Top stories..." not "Top stories:"
-        - For smooth transitions between sections, you can say things like "Moving to market movers..." or "Now for global developments..."
+        - Use periods (.) instead of colons for section transitions: "Top stories." not "Top stories:"
+        - For smooth transitions between sections, you can say things like "Moving to market movers." or "Now for global developments."
         - Write everything as clean, flowing text ready for TTS
         
         ACCURACY RULES:
@@ -522,6 +592,13 @@ class PremiumMorningBriefingV2:
         - Write in professional broadcast style
         - Use present tense for current events
         
+        ANTI-DUPLICATION RULES:
+        - NEVER repeat the same event, company, or story across different sections
+        - Before covering any story, check: "Have I already mentioned this event/company/topic?"
+        - Each company, leader, country, or major event should only appear ONCE in the entire briefing
+        - If similar stories exist, choose the most important one and ignore the rest
+        - Ensure each section covers DIFFERENT topics - no overlap between sections
+        
         FORMAT FOR TTS:
         - Stock tickers: "ticker A-B-C --" (spell out with dashes)
         - Percentages: "five percent" not "5%"
@@ -530,6 +607,9 @@ class PremiumMorningBriefingV2:
         - Company names: spell out abbreviations on first mention
         - NEVER use pipe characters (|) - use periods or commas for natural pauses
         - Separate statements with periods, not pipes: "Bitcoin at $118,000, up one percent. Ethereum at $4,500, up two percent."
+        - Section headers need double line breaks for longer TTS pauses: "Top stories.\n\nContent starts here"
+        - Transition phrases need double line breaks: "Moving to market movers.\n\nContent continues"
+        - Individual stories within sections separated by single line breaks for natural flow
         
         Generate the clean, TTS-ready briefing now:
         """
@@ -683,7 +763,7 @@ class PremiumMorningBriefingV2:
             "gemini_word_count": len(gemini_briefing.split()),
             "raw_word_count": len(raw_briefing_text.split()),
             "data_summary": {
-                "economic_events": len(all_data["economic_calendar"]["today"]),
+                "economic_events": len(all_data["economic_calendar"].get("high_impact_events", [])),
                 "world_news": len(selected_stories["world"]),
                 "usa_news": len(selected_stories["usa"]),
                 "finance_news": len(selected_stories["finance"]),
@@ -716,13 +796,13 @@ async def main():
         print(f"🎵 Audio file: {result['audio_file']}")
     print(f"📝 Gemini briefing: {result['gemini_word_count']} words (10-minute target)")
     print(f"📄 Raw articles: {result['raw_word_count']} words")
-    print(f"\n📈 Articles Analyzed:")
-    print(f"   Total: {result['data_summary']['total_articles']} articles")
-    print(f"   🌍 World: {result['data_summary']['world_news']} stories")
-    print(f"   🇺🇸 USA: {result['data_summary']['usa_news']} stories")
-    print(f"   💰 Finance: {result['data_summary']['finance_news']} stories")
-    print(f"   💻 Tech: {result['data_summary']['tech_news']} stories")
-    print(f"   📅 Economic events: {result['data_summary']['economic_events']}")
+    print(f"\n📈 Content Summary:")
+    print(f"   📅 High-impact economic events: {result['data_summary']['economic_events']} (next 5 business days)")
+    print(f"   📰 Total articles analyzed: {result['data_summary']['total_articles']}")
+    print(f"      🌍 World: {result['data_summary']['world_news']} stories")
+    print(f"      🇺🇸 USA: {result['data_summary']['usa_news']} stories")
+    print(f"      💰 Finance: {result['data_summary']['finance_news']} stories")
+    print(f"      💻 Tech: {result['data_summary']['tech_news']} stories")
     if result.get('audio_file'):
         print(f"\n🎧 Audio briefing ready to play: {result['audio_file']}")
     else:

@@ -167,6 +167,7 @@ def generate_section(articles, section_name, word_count, focus_keywords=None):
     - Percentages: "five percent" not "5%"
     - Money: "billion dollars" not "$B"
     - Numbers: "two point five million" not "2.5M"
+    - Section headers and transitions need double line breaks for TTS pauses: "Market highlights...\n\nContent starts here"
     - No markdown, no asterisks
     
     Write detailed analysis covering DIFFERENT stories. Each company should be mentioned only once.

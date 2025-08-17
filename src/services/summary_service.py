@@ -92,6 +92,7 @@ class SummaryService:
         - Use short, clear sentences (max 20 words)
         - Add natural pauses with periods between topics
         - Use transition phrases: "Moving to tech news...", "In the energy sector...", "Turning to economic data..."
+        - Section headers and transitions need double line breaks for TTS pauses: "Moving to tech news...\n\nContent starts here"
         - Avoid run-on sentences
         - Each story should be 3-5 sentences
         
