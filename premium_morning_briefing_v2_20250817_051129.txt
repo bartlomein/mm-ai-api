@@ -1,0 +1,52 @@
+PREMIUM MORNING MARKET BRIEFING
+Generated: August 17, 2025 at 05:11 AM ET
+================================================================================
+
+📅 ECONOMIC CALENDAR
+----------------------------------------
+No major economic events scheduled for today.
+
+📊 PREMARKET OVERVIEW
+----------------------------------------
+
+Cryptocurrency (24hr):
+  • BTC: $118,347.65 (+0.76%)
+  • ETH: $4,549.99 (+2.82%)
+  • BNB: $857.79 (+2.21%)
+
+🌍 WORLD NEWS DIGEST
+----------------------------------------
+No significant world news in the past 12 hours.
+
+🇺🇸 USA MARKET NEWS
+----------------------------------------
+1. Gay couple weighs uncertain future as debate over marriage equality resurfaces
+   TAMPA, Florida (WFTS) -- In a cozy home nestled in the heart of Tampa, a simple ballpoint pen sits b...
+2. Ukraine left scrambling as Trump shifts toward Putin after Alaska summit
+   LONDON -- Ukraine and its allies were scrambling Sunday to respond to President Donald Trump's appar...
+
+💰 FINANCIAL SECTOR UPDATES
+----------------------------------------
+1. [Finlight] Zack Polanski pulling away in race to be party leader, senior Greens believe
+   Zack Polanski, the insurgent candidate for Green party leader whose “eco-populism” and social media ...
+2. [Finlight] What to Know About Bolivia’s Presidential Election
+   Bolivia is holding a presidential election on Sunday that many analysts expect will end the 20-year ...
+3. [Finlight] Ukrainians Fleeing Russia’s Attacks Say the Alaska Summit Was an Insult
+   In a post on social media, Mr. Trump reversed his support of Ukraine’s position that a cease-fire mu...
+
+💻 TECHNOLOGY HIGHLIGHTS
+----------------------------------------
+No significant tech news in the past 12 hours.
+
+🎯 MARKET SYNTHESIS
+----------------------------------------
+Total stories analyzed: 7
+Overall news sentiment: Neutral (-0.00)
+
+Data Sources:
+  • Financial Modeling Prep (FMP) - Market data & calendar
+  • NewsAPI.ai - World, USA, and tech news
+  • Finlight - Financial market news
+
+================================================================================
+END OF BRIEFING

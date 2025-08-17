@@ -308,14 +308,22 @@ class FMPService:
         
         return normalized
     
-    async def get_economic_calendar(self) -> Dict[str, Any]:
-        """Get upcoming economic events"""
-        today = datetime.now().strftime("%Y-%m-%d")
-        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    async def get_economic_calendar(self, from_date: str = None, to_date: str = None, country: str = None) -> Dict[str, Any]:
+        """Get upcoming economic events
+        
+        Args:
+            from_date: Start date in YYYY-MM-DD format (defaults to today)
+            to_date: End date in YYYY-MM-DD format (defaults to tomorrow)
+            country: Filter by country code (e.g., 'US', 'EU', 'GB')
+        """
+        if from_date is None:
+            from_date = datetime.now().strftime("%Y-%m-%d")
+        if to_date is None:
+            to_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         
         params = {
-            "from": today,
-            "to": tomorrow
+            "from": from_date,
+            "to": to_date
         }
         
         data = await self._make_request("economic_calendar", params)
@@ -329,7 +337,12 @@ class FMPService:
             "summary": ""
         }
         
-        for event in data[:10]:  # Limit to 10 events
+        # Filter by country if specified
+        if country:
+            data = [event for event in data if event.get("country") == country]
+        
+        # Process all events (remove the 10 event limit for weekly view)
+        for event in data:
             event_data = {
                 "date": event.get("date"),
                 "event": event.get("event"),

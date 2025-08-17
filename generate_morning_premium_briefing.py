@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from services.summary_service import SummaryService
 from services.audio_service import AudioService
+from services.fmp_service import FMPService
 from crypto_analysis import CryptoAnalyzer
 
 # Load environment variables
@@ -177,12 +178,14 @@ class MorningPremiumBriefingGenerator:
         self.summary_service = SummaryService()
         self.audio_service = AudioService()
         self.calendar_service = EconomicCalendarService()
+        self.fmp_service = FMPService()
         self.finlight_api_key = os.getenv("FINLIGHT_API_KEY")
         
         # Morning briefing structure (12-15 minutes = 1800-2250 words)
         self.sections = [
             ("opening", 30),           # Morning greeting with date and overview
             ("economic_calendar", 200), # Today's economic events analysis
+            ("weekly_economic_outlook", 180), # This week's key economic events
             ("futures_premarket", 180), # Futures and pre-market activity
             ("market_overview", 200),   # Yesterday's close and overnight moves
             ("earnings_today", 180),     # Today's earnings releases
@@ -202,6 +205,29 @@ class MorningPremiumBriefingGenerator:
         
         self.mentioned_companies = set()
         self.used_articles = set()
+    
+    def get_weekly_calendar_dates(self):
+        """Get dates for weekly economic calendar based on current day of week"""
+        today = datetime.now()
+        current_weekday = today.weekday()  # 0=Monday, 6=Sunday
+        
+        # Get Monday of current week
+        monday_this_week = today - timedelta(days=current_weekday)
+        
+        # Get Sunday of current week
+        sunday_this_week = monday_this_week + timedelta(days=6)
+        
+        # If it's Wednesday (2) or later, extend to next Sunday
+        if current_weekday >= 2:  # Wednesday = 2
+            # Include next week too (extend to next Sunday)
+            end_date = sunday_this_week + timedelta(days=7)
+            includes_next_week = True
+        else:
+            # Just this week
+            end_date = sunday_this_week
+            includes_next_week = False
+        
+        return monday_this_week.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), includes_next_week
         
     async def generate_morning_briefing(self) -> Tuple[str, str]:
         """Generate complete morning premium briefing"""
@@ -220,6 +246,35 @@ class MorningPremiumBriefingGenerator:
         high_impact_events = self.calendar_service.get_high_impact_events(economic_events)
         
         print(f"Found {len(economic_events)} total events, {len(high_impact_events)} high-impact")
+        
+        # Fetch weekly economic calendar
+        print("📅 Fetching weekly economic calendar...")
+        start_date, end_date, includes_next_week = self.get_weekly_calendar_dates()
+        weekly_calendar = await self.fmp_service.get_economic_calendar(
+            from_date=start_date,
+            to_date=end_date
+        )
+        
+        weekly_high_impact = []
+        if weekly_calendar:
+            # Filter out past events and get high impact only
+            now = datetime.now()
+            for event in weekly_calendar.get("high_impact", []):
+                event_date_str = event.get('date', '')
+                try:
+                    if ' ' in event_date_str:
+                        event_datetime = datetime.strptime(event_date_str, "%Y-%m-%d %H:%M:%S")
+                    else:
+                        event_datetime = datetime.strptime(event_date_str, "%Y-%m-%d")
+                        event_datetime = event_datetime.replace(hour=23, minute=59)
+                    
+                    if event_datetime >= now:
+                        weekly_high_impact.append(event)
+                except:
+                    weekly_high_impact.append(event)
+        
+        period_desc = "This Week + Next Week" if includes_next_week else "This Week"
+        print(f"Found {len(weekly_high_impact)} upcoming high-impact events for {period_desc}")
         
         # Fetch real crypto data for crypto section
         print("📊 Fetching cryptocurrency market data...")
@@ -246,6 +301,10 @@ class MorningPremiumBriefingGenerator:
                 if section_name == "economic_calendar":
                     section_content = self._generate_economic_section(
                         high_impact_events, economic_events, target_words
+                    )
+                elif section_name == "weekly_economic_outlook":
+                    section_content = self._generate_weekly_economic_section(
+                        weekly_high_impact, includes_next_week, target_words
                     )
                 elif section_name == "crypto_digital":
                     # Use real crypto data for crypto section
@@ -276,6 +335,10 @@ class MorningPremiumBriefingGenerator:
                         if section_name == "economic_calendar":
                             section_content = self._generate_economic_section(
                                 high_impact_events, economic_events, target_words
+                            )
+                        elif section_name == "weekly_economic_outlook":
+                            section_content = self._generate_weekly_economic_section(
+                                weekly_high_impact, includes_next_week, target_words
                             )
                         else:
                             section_content = self._generate_section(
@@ -320,12 +383,11 @@ class MorningPremiumBriefingGenerator:
         
         # Run async audio generation
         try:
-            import asyncio
             # generate_audio returns bytes, not a filename
-            audio_bytes = asyncio.run(self.audio_service.generate_audio(
+            audio_bytes = await self.audio_service.generate_audio(
                 full_briefing,
                 tier="premium"  # Use premium voice
-            ))
+            )
             
             if audio_bytes:
                 # Save the audio bytes to file
@@ -510,6 +572,109 @@ DO NOT HALLUCINATE: Only discuss the events and numbers explicitly listed above.
         section = self.summary_service.model.generate_content(prompt).text
         return self._format_for_tts(section)
     
+    def _generate_weekly_economic_section(self, weekly_events: List[Dict], 
+                                        includes_next_week: bool, 
+                                        target_words: int) -> str:
+        """Generate weekly economic calendar section for morning briefing"""
+        
+        # Group events by date for better organization
+        events_by_date = {}
+        for event in weekly_events:
+            event_date = event.get('date', '').split(' ')[0] if ' ' in event.get('date', '') else event.get('date', '')
+            if event_date:
+                if event_date not in events_by_date:
+                    events_by_date[event_date] = []
+                events_by_date[event_date].append(event)
+        
+        # Format events for the prompt
+        events_text = ""
+        
+        if events_by_date:
+            sorted_dates = sorted(events_by_date.keys())
+            
+            # Determine this week vs next week
+            today = datetime.now()
+            monday_this_week = today - timedelta(days=today.weekday())
+            sunday_this_week = monday_this_week + timedelta(days=6)
+            
+            events_text += "High-impact economic events scheduled:\n\n"
+            
+            for date in sorted_dates:
+                try:
+                    date_obj = datetime.strptime(date, "%Y-%m-%d")
+                    day_name = date_obj.strftime("%A")
+                    formatted_date = date_obj.strftime("%B %d")
+                    
+                    # Determine if this week or next week
+                    if date_obj <= sunday_this_week:
+                        week_label = "This Week"
+                    else:
+                        week_label = "Next Week"
+                    
+                    events_text += f"{week_label} - {day_name}, {formatted_date}:\n"
+                    
+                    for event in events_by_date[date]:
+                        time_str = event.get('date', '').split(' ')[1] if ' ' in event.get('date', '') else 'TBD'
+                        country = event.get('country', 'N/A')
+                        event_name = event.get('event', 'Unknown Event')
+                        
+                        # Add previous/estimate/actual data if available
+                        details = []
+                        if event.get('previous'):
+                            details.append(f"Previous: {event['previous']}")
+                        if event.get('estimate'):
+                            details.append(f"Estimate: {event['estimate']}")
+                        if event.get('actual'):
+                            details.append(f"Actual: {event['actual']}")
+                        
+                        details_str = f" ({', '.join(details)})" if details else ""
+                        
+                        events_text += f"  • {time_str} {country}: {event_name}{details_str}\n"
+                    
+                    events_text += "\n"
+                    
+                except ValueError:
+                    # Fallback for date parsing issues
+                    events_text += f"{date}:\n"
+                    for event in events_by_date[date]:
+                        events_text += f"  • {event.get('country', 'N/A')}: {event.get('event', 'Unknown')}\n"
+                    events_text += "\n"
+        
+        else:
+            period_desc = "this week and next week" if includes_next_week else "this week"
+            events_text = f"No high-impact economic events scheduled for {period_desc}."
+        
+        period_title = "This Week + Next Week" if includes_next_week else "This Week"
+        
+        prompt = f"""Generate EXACTLY {target_words} words for the weekly economic calendar outlook section.
+
+IMPORTANT: Use ONLY the data provided below. DO NOT make up any events, dates, or numbers.
+
+{period_title}'s Economic Calendar:
+{events_text}
+
+Requirements:
+1. Start with "Looking ahead at {period_title.lower()}'s economic calendar"
+2. ONLY discuss the events listed above - don't add any others
+3. Use the EXACT numbers and dates provided (previous, estimate, actual)
+4. If no events are listed, mention the light economic calendar
+5. Explain what these events mean for markets and trading strategies
+6. Group by this week vs next week if both periods are included
+7. Highlight the most market-moving events
+8. MUST be EXACTLY {target_words} words
+
+Format any PROVIDED numbers for speech:
+- "eight thirty A-M Eastern" not "8:30 AM ET"
+- "two point five percent" not "2.5%" (only if data shows 2.5)
+- Use the exact figures from the events above
+
+DO NOT HALLUCINATE: Only discuss the events and numbers explicitly listed above.
+If the calendar is light, focus on what that means for market volatility and trading conditions.
+"""
+        
+        section = self.summary_service.model.generate_content(prompt).text
+        return self._format_for_tts(section)
+    
     def _generate_section(self, section_name: str, articles: List[Dict], 
                          target_words: int) -> str:
         """Generate a specific section of the morning briefing"""
@@ -620,7 +785,8 @@ Write the section now using ONLY facts from the articles:"""
             "crypto_digital": ["bitcoin", "ethereum", "crypto", "blockchain", "overnight", "24-hour"],
             "international": ["china", "europe", "japan", "asia", "emerging", "currency", "global"],
             "watchlist": ["watch", "level", "support", "resistance", "breakout", "volume", "unusual"],
-            "day_ahead": ["today", "expect", "outlook", "forecast", "catalyst", "scheduled"]
+            "day_ahead": ["today", "expect", "outlook", "forecast", "catalyst", "scheduled"],
+            "weekly_economic_outlook": ["economic calendar", "economic events", "fed", "cpi", "gdp", "employment", "inflation", "central bank", "policy", "rate decision"]
         }
         
         keywords = section_keywords.get(section_name, [])

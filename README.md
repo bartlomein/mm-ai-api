@@ -30,8 +30,12 @@ cp .env.example .env
 ```
 
 2. **Required API Keys:**
-- `FINLIGHT_API_KEY` - For news data (get from finlight.me)
+- `FINLIGHT_API_KEY` - For financial news data (get from finlight.me)
+- `NEWSAPI_AI_KEY` - For comprehensive news coverage (get from eventregistry.org)
+- `FMP_API_KEY` - For real-time market data (get from financialmodelingprep.com)
 - `GEMINI_API_KEY` - For AI summaries (get from Google AI Studio)
+- `FISH_API_KEY` - For high-quality TTS (optional, get from fish.audio)
+- `OPENAI_API_KEY` - For fallback TTS (optional)
 
 3. **Make sure Docker is running**, then:
 ```bash
@@ -59,6 +63,41 @@ Open the audio_url from the response in your browser or:
 curl http://localhost:8000/api/test/audio/{file_id} -o briefing.mp3
 ```
 
+## News Search Scripts
+
+### Search Any Topic
+```bash
+# Basic search (last 24 hours)
+./search_news_topic.py "artificial intelligence"
+
+# Search last N days
+./search_news_topic.py "Tesla" 3  # Last 3 days
+./search_news_topic.py "Bitcoin" 7 25  # Last 7 days, max 25 articles
+
+# Precise time search
+./search_news_topic.py "Apple earnings" --time "2025-08-16 09:00" "2025-08-16 17:00"
+./search_news_topic.py "Fed meeting" --time "2025-08-15 14:00" "2025-08-16 10:00" 20
+```
+
+### Recent Hours Search
+```bash
+# Get news from the last N hours
+./search_recent_hours.py 2  # Last 2 hours
+./search_recent_hours.py 24  # Last 24 hours
+```
+
+### Generate Briefings
+```bash
+# Market data briefing with real-time data
+./generate_market_data_briefing.py
+
+# Crypto market analysis
+./generate_crypto_briefing.py
+
+# SPY premarket analysis
+./generate_spy_premarket.py
+```
+
 ## API Endpoints
 
 ### Core Pipeline (Testing)
@@ -73,13 +112,15 @@ curl http://localhost:8000/api/test/audio/{file_id} -o briefing.mp3
 ## Project Structure
 ```
 src/
-├── main.py                 # FastAPI app
+├── main.py                    # FastAPI app
 ├── services/
-│   ├── news_service.py     # Finlight API integration
-│   ├── summary_service.py  # Gemini AI summaries
-│   ├── audio_service.py    # OpenAI TTS
-│   └── pipeline_service.py # Orchestration
-└── models/                 # Data models (coming soon)
+│   ├── news_service.py        # Finlight API integration
+│   ├── newsapiai_service.py   # NewsAPI.ai integration
+│   ├── fmp_service.py         # Financial Modeling Prep API
+│   ├── summary_service.py     # Gemini AI summaries
+│   ├── audio_service.py       # Fish Audio / OpenAI TTS
+│   └── pipeline_service.py    # Orchestration
+└── models/                    # Data models (coming soon)
 ```
 
 ## Next Steps

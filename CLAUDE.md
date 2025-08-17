@@ -4,7 +4,7 @@
 MarketMotion is an automated financial news briefing system that generates 5-minute audio market updates using AI. It fetches financial news, creates intelligent summaries, and converts them to speech using advanced TTS services.
 
 ## Key Features
-- **Automated News Aggregation**: Fetches latest financial news from Finlight API
+- **Multi-Source News Aggregation**: Fetches financial news from Finlight API and NewsAPI.ai
 - **Real-Time Market Data**: Integrates Financial Modeling Prep (FMP) for live market quotes, crypto, and indices
 - **AI-Powered Summarization**: Uses Google Gemini to create professional market briefings
 - **Text-to-Speech**: Converts briefings to audio using Fish Audio (primary) or OpenAI TTS (fallback)
@@ -21,6 +21,7 @@ src/
 ├── services/
 │   ├── audio_service.py      # TTS generation (Fish Audio, OpenAI)
 │   ├── news_service.py        # Finlight API integration for news articles
+│   ├── newsapiai_service.py   # NewsAPI.ai integration for comprehensive news coverage
 │   ├── fmp_service.py         # Financial Modeling Prep API for market data
 │   ├── summary_service.py     # Gemini AI summarization and script generation
 │   ├── pipeline_service.py    # Orchestrates the full pipeline
@@ -43,6 +44,32 @@ src/
 - Fetches general market news or ticker-specific articles
 - Returns structured article data with title, content, source, and date
 - Handles API errors gracefully with empty list fallbacks
+
+#### **newsapiai_service.py**
+- Integrates with NewsAPI.ai (Event Registry) for comprehensive news coverage
+- **Key Methods:**
+  - `search_articles()` - Advanced search with date filtering and English language
+  - `search_articles_by_time()` - Precise datetime filtering for specific time ranges
+  - `fetch_financial_news()` - Specialized financial and business news search
+  - `fetch_for_date_range()` - Date-specific queries (last N days)
+  - `get_recent_headlines()` - Recent news from last N hours
+  - `get_trending_topics()` - Trending concepts and topics analysis
+- **Features:**
+  - Advanced date/time filtering (dateStart, dateEnd, precise datetime)
+  - Keyword search with boolean operators (AND, OR, NOT)
+  - Article sorting by date, relevance, or social score
+  - Always returns English articles with normalized data structure
+  - Sentiment analysis (-1 to 1 scale) for each article
+  - Concept extraction (entities, topics, categories)
+  - Source diversity tracking
+  - Deduplication of similar articles
+- **Data Returned:**
+  - Title, content, source, URL
+  - Published date/time with timezone
+  - Sentiment score
+  - Related concepts and entities
+  - Categories and topics
+- Enables multi-source news aggregation with Finlight
 
 #### **fmp_service.py**
 - Real-time market data from Financial Modeling Prep API
@@ -76,8 +103,12 @@ src/
   - `generate_personalized_briefing()` - Ticker-specific for premium tier
   - `generate_market_data_briefing()` - FMP data + news combination
   - `generate_intraday_update()` - Symbol-specific performance updates
+  - `generate_multi_source_briefing()` - Combines Finlight + NewsAPI.ai sources
+  - `generate_date_filtered_briefing()` - Date-specific briefings using NewsAPI.ai
+  - `generate_trending_briefing()` - Briefings based on trending topics analysis
 - Handles file storage and audio generation
 - Returns structured responses with metadata
+- Supports multi-source news aggregation and date-filtered content
 
 #### **supabase_service.py** (if configured)
 - Database operations for user data and briefings
@@ -97,6 +128,13 @@ src/
 - `generate_crypto_briefing.py` - Crypto market analysis ("How is crypto doing?")
 - `generate_spy_premarket.py` - SPY premarket activity briefing
 
+#### NewsAPI.ai Scripts
+- `search_news_topic.py` - Search for news on any topic with flexible time filtering
+- `search_recent_hours.py` - Get news from the last N hours
+- `generate_newsapiai_demo.py` - Demonstrates NewsAPI.ai capabilities and multi-source briefings
+- `generate_weekly_economic_calendar.py` - Generate economic calendar briefings
+- `test_newsapiai_service.py` - Tests NewsAPI.ai service methods and pipeline integration
+
 #### Testing Scripts
 - `test_pipeline.py` - Tests the full pipeline
 - `test_fmp_service.py` - Tests all FMP service methods
@@ -109,6 +147,7 @@ src/
 ```bash
 # News & Market Data
 FINLIGHT_API_KEY=xxx           # Required: Financial news API
+NEWSAPI_AI_KEY=xxx             # Required: NewsAPI.ai for comprehensive news coverage
 FMP_API_KEY=xxx                # Required: Financial Modeling Prep for market data
 
 # AI/LLM
@@ -166,6 +205,31 @@ SUPABASE_ANON_KEY=xxx
 
 # "How is SPY doing premarket?"
 ./generate_spy_premarket.py
+```
+
+#### NewsAPI.ai Topic Search
+```bash
+# Search any topic (returns title and full content)
+./search_news_topic.py "artificial intelligence"
+./search_news_topic.py "Tesla" 3  # Last 3 days
+./search_news_topic.py "Bitcoin" 7 25  # Last 7 days, max 25 articles
+
+# Time-based search (precise datetime filtering)
+./search_news_topic.py "Apple earnings" --time "2025-08-16 09:00" "2025-08-16 17:00"
+./search_news_topic.py "Fed meeting" --time "2025-08-15 14:00" "2025-08-16 10:00" 20
+
+# Output format:
+# - Clear article boundaries (ARTICLE N / END OF ARTICLE N)
+# - Full title and complete content (no truncation)
+# - Supports any topic: stocks, crypto, economics, technology, etc.
+```
+
+#### Recent News Search
+```bash
+# Get news from the last N hours
+./search_recent_hours.py 2  # Last 2 hours
+./search_recent_hours.py 24  # Last 24 hours
+./search_recent_hours.py 1 20  # Last hour, max 20 articles
 ```
 
 ### Start the API Server
@@ -333,16 +397,23 @@ The system provides detailed logging:
 
 - **Fish Audio Docs**: https://docs.fish.audio
 - **Finlight API**: https://finlight.me
+- **NewsAPI.ai (Event Registry)**: https://eventregistry.org/documentation
 - **Financial Modeling Prep API**: https://site.financialmodelingprep.com/developer/docs
 - **Google Gemini**: https://ai.google.dev
 - **OpenAI TTS**: https://platform.openai.com/docs/guides/text-to-speech
 
 ## Version History
 
-### Current Version: 2.1
-- **NEW: Financial Modeling Prep (FMP) integration for real-time market data**
-- **NEW: Investor-focused queries (crypto, premarket, intraday tracking)**
-- **NEW: Combined market data + news briefings**
+### Current Version: 2.2
+- **NEW: Enhanced NewsAPI.ai integration with comprehensive documentation**
+- **NEW: Topic search script with full content retrieval (no truncation)**
+- **NEW: Precise datetime filtering for time-based searches**
+- **NEW: Clear article boundaries in search output**
+- Financial Modeling Prep (FMP) integration for real-time market data
+- Investor-focused queries (crypto, premarket, intraday tracking)
+- Combined market data + news briefings
+- Multi-source news aggregation (Finlight + NewsAPI.ai)
+- Sentiment analysis and concept extraction
 - Generates proper 5-minute briefings (750-850 words)
 - Includes article deduplication
 - Supports Fish Audio as primary TTS

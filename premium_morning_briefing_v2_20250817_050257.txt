@@ -1,0 +1,45 @@
+PREMIUM MORNING MARKET BRIEFING
+Generated: August 17, 2025 at 05:02 AM ET
+================================================================================
+
+📅 ECONOMIC CALENDAR
+----------------------------------------
+No major economic events scheduled for today.
+
+📊 PREMARKET OVERVIEW
+----------------------------------------
+
+🌍 WORLD NEWS DIGEST
+----------------------------------------
+No significant world news in the past 12 hours.
+
+🇺🇸 USA MARKET NEWS
+----------------------------------------
+No significant USA news in the past 12 hours.
+
+💰 FINANCIAL SECTOR UPDATES
+----------------------------------------
+1. [NewsAPI] At least 150 still missing in Pakistan after deadly flash floods
+   A boy sits in front of shops damaged by Friday's flash flooding on the outskirts of Pir Baba, Buner ...
+2. [NewsAPI] GST rationalisation proposed! Lower slabs to lift domestic consumption, aid essentials & durables— what do economists say
+   Domestic and international considerations
+
+Domestic consumption would be strengthened after the gove...
+3. [NewsAPI] Can India’s stock market withstand the tariff storm?
+   Investing.com -- India’s stock market faces significant risks from the U.S. administration’s propose...
+
+💻 TECHNOLOGY HIGHLIGHTS
+----------------------------------------
+No significant tech news in the past 12 hours.
+
+🎯 MARKET SYNTHESIS
+----------------------------------------
+Total stories analyzed: 5
+
+Data Sources:
+  • Financial Modeling Prep (FMP) - Market data & calendar
+  • NewsAPI.ai - World, USA, and tech news
+  • Finlight - Financial market news
+
+================================================================================
+END OF BRIEFING
