@@ -18,8 +18,16 @@ ENV/
 *.mp3
 *.wav
 *.m4a
+
+# All generated briefing text files
 briefing_*.txt
 briefing_*.mp3
+premium_*.txt
+*_briefing_*.txt
+*_raw_data_*.txt
+
+# Any other generated txt files
+*.txt
 
 # Audio files
 static/audio/*.mp3
@@ -41,6 +49,7 @@ logs/
 test_*.mp3
 test_*.txt
 test.mp3
+debug_*.py
 
 # Docker
 docker-compose.override.yml
