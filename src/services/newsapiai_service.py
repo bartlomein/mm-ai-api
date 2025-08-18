@@ -14,6 +14,42 @@ class NewsAPIAIService:
         
         if not self.api_key:
             print("[NewsAPIAIService] WARNING: NEWSAPI_AI_KEY not found in environment variables")
+        
+        # Topic to Wikipedia concept URI mapping
+        self.topic_concepts = {
+            "artificial intelligence": "http://en.wikipedia.org/wiki/Artificial_intelligence",
+            "biotechnology": "http://en.wikipedia.org/wiki/Biotechnology", 
+            "cryptocurrency": "http://en.wikipedia.org/wiki/Cryptocurrency",
+            "renewable energy": "http://en.wikipedia.org/wiki/Renewable_energy",
+            "electric vehicles": "http://en.wikipedia.org/wiki/Electric_vehicle",
+            "quantum computing": "http://en.wikipedia.org/wiki/Quantum_computing",
+            "gene therapy": "http://en.wikipedia.org/wiki/Gene_therapy",
+            "nuclear fusion": "http://en.wikipedia.org/wiki/Nuclear_fusion",
+            "space tourism": "http://en.wikipedia.org/wiki/Space_tourism",
+            "cybersecurity": "http://en.wikipedia.org/wiki/Computer_security",
+            "blockchain": "http://en.wikipedia.org/wiki/Blockchain",
+            "machine learning": "http://en.wikipedia.org/wiki/Machine_learning",
+            "climate change": "http://en.wikipedia.org/wiki/Climate_change",
+            "federal reserve": "http://en.wikipedia.org/wiki/Federal_Reserve",
+            "pharmaceutical": "http://en.wikipedia.org/wiki/Pharmaceutical_industry"
+        }
+    
+    def get_concept_uri(self, topic: str) -> Optional[str]:
+        """Get Wikipedia concept URI for a topic."""
+        topic_lower = topic.lower().strip()
+        
+        # Direct match
+        if topic_lower in self.topic_concepts:
+            return self.topic_concepts[topic_lower]
+        
+        # Partial match for compound topics
+        for known_topic, uri in self.topic_concepts.items():
+            if known_topic in topic_lower or any(word in topic_lower for word in known_topic.split()):
+                return uri
+        
+        # Generate URI for unknown topics
+        formatted_topic = topic.replace(" ", "_").title()
+        return f"http://en.wikipedia.org/wiki/{formatted_topic}"
     
     async def _make_request(self, endpoint: str, params: Optional[Dict] = None, data: Optional[Dict] = None) -> Any:
         """Make HTTP request with consistent error handling"""
@@ -67,7 +103,7 @@ class NewsAPIAIService:
         ignore_sources: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Search articles with date filtering and English language
+        Search articles using proper NewsAPI.ai query structure
         
         Args:
             keyword: Search terms/phrases
@@ -82,63 +118,76 @@ class NewsAPIAIService:
             Dict with articles, summary, and metadata
         """
         try:
-            # Build query parameters
-            query_data = {
-                "action": "getArticles",
-                "resultType": "articles",
-                "articlesSortBy": sort_by,
-                "articlesCount": max_articles,
-                "lang": "eng",  # Always English
-                "dataType": "news"  # Only news articles, not blogs or PR
-            }
+            # Build proper NewsAPI.ai query structure following sandbox example
+            query_conditions = []
             
-            # Add keyword search if provided
+            # Try to use concept URI first for better results
+            concept_uri = None
             if keyword:
-                query_data["keyword"] = keyword
-                query_data["keywordsLoc"] = "body,title"  # Search in both title and body
+                concept_uri = self.get_concept_uri(keyword)
+                if concept_uri:
+                    query_conditions.append({"conceptUri": concept_uri})
+                    print(f"[NewsAPIAIService] Using concept URI: {concept_uri}")
+                else:
+                    # Fallback to keyword search
+                    query_conditions.append({"keyword": keyword, "keywordsLoc": "body,title"})
+                    print(f"[NewsAPIAIService] Using keyword search: {keyword}")
             
-            # Add date filtering if provided
+            # Add date and language filtering
+            date_lang_condition = {"lang": "eng"}
             if date_start:
-                query_data["dateStart"] = date_start
+                date_lang_condition["dateStart"] = date_start
             if date_end:
-                query_data["dateEnd"] = date_end
+                date_lang_condition["dateEnd"] = date_end
+            query_conditions.append(date_lang_condition)
             
-            # Add category filtering for financial news
+            # Add category filtering if provided
             if category:
-                # Map common categories to NewsAPI.ai category URIs
                 category_map = {
                     "business": "dmoz/Business",
-                    "finance": "dmoz/Business/Financial_Services",
+                    "finance": "dmoz/Business/Financial_Services", 
                     "economy": "dmoz/Business/Economics_and_Trade",
                     "markets": "dmoz/Business/Investing"
                 }
                 if category.lower() in category_map:
-                    query_data["categoryUri"] = category_map[category.lower()]
+                    query_conditions.append({"categoryUri": category_map[category.lower()]})
             
-            # Add source exclusion - default to excluding Times of India
+            # Build the complete query structure exactly like the sandbox
+            query_data = {
+                "$query": {
+                    "$and": query_conditions
+                },
+                "$filter": {
+                    "startSourceRankPercentile": 0,
+                    "endSourceRankPercentile": 40  # Top 40% sources as requested
+                }
+            }
+            
+            # Add source exclusion to filter
             default_ignore = ["timesofindia.com", "timesofindia.indiatimes.com"]
-            
             if ignore_sources is None:
                 ignore_sources = default_ignore
             else:
-                # Combine user-specified sources with defaults
                 ignore_sources = list(set(ignore_sources + default_ignore))
             
-            # Add to query if we have sources to exclude
             if ignore_sources:
                 if len(ignore_sources) == 1:
-                    query_data["ignoreSourceUri"] = ignore_sources[0]
+                    query_data["$filter"]["ignoreSourceUri"] = ignore_sources[0]
                 else:
-                    # For multiple sources, pass as list
-                    query_data["ignoreSourceUri"] = ignore_sources
+                    query_data["$filter"]["ignoreSourceUri"] = ignore_sources
             
-            # Log the search parameters including excluded sources
-            if ignore_sources:
-                print(f"[NewsAPIAIService] Searching articles with keyword: {keyword}, dates: {date_start} to {date_end}, excluding: {ignore_sources}")
-            else:
-                print(f"[NewsAPIAIService] Searching articles with keyword: {keyword}, dates: {date_start} to {date_end}")
+            # Prepare the complete request data
+            request_data = {
+                "query": query_data,
+                "resultType": "articles",
+                "articlesSortBy": sort_by,
+                "articlesCount": max_articles
+            }
             
-            response = await self._make_request("article/getArticles", data=query_data)
+            # Log the search parameters
+            print(f"[NewsAPIAIService] Searching: {keyword or concept_uri}, dates: {date_start} to {date_end}, top 40% sources")
+            
+            response = await self._make_request("article/getArticles", data=request_data)
             
             if not response:
                 return {"articles": [], "summary": "No articles found", "metadata": {}}
@@ -194,6 +243,111 @@ class NewsAPIAIService:
         except Exception as e:
             print(f"[NewsAPIAIService] Error in search_articles: {str(e)}")
             return {"articles": [], "summary": "Search failed", "metadata": {}}
+    
+    async def search_articles_by_topic(
+        self,
+        topic: str,
+        date_start: Optional[str] = None,
+        date_end: Optional[str] = None,
+        max_articles: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Search articles by topic using concept URI (better for specific topics)
+        """
+        try:
+            concept_uri = self.get_concept_uri(topic)
+            
+            # Build query conditions
+            query_conditions = [
+                {"conceptUri": concept_uri}
+            ]
+            
+            # Add date and language filtering
+            date_lang_condition = {"lang": "eng"}
+            if date_start:
+                date_lang_condition["dateStart"] = date_start
+            if date_end:
+                date_lang_condition["dateEnd"] = date_end
+            query_conditions.append(date_lang_condition)
+            
+            # Build complete query following sandbox structure
+            request_data = {
+                "query": {
+                    "$query": {
+                        "$and": query_conditions
+                    },
+                    "$filter": {
+                        "startSourceRankPercentile": 0,
+                        "endSourceRankPercentile": 40,  # Top 40% sources
+                        "ignoreSourceUri": ["timesofindia.com", "timesofindia.indiatimes.com"]
+                    }
+                },
+                "resultType": "articles",
+                "articlesSortBy": "date",
+                "articlesCount": max_articles
+            }
+            
+            print(f"[NewsAPIAIService] Topic search using concept URI: {concept_uri}")
+            print(f"[NewsAPIAIService] Date range: {date_start} to {date_end}, max articles: {max_articles}")
+            
+            response = await self._make_request("article/getArticles", data=request_data)
+            
+            if not response:
+                return {"articles": [], "summary": "No articles found", "metadata": {}}
+            
+            # Extract articles from response
+            articles_data = response.get("articles", {})
+            raw_articles = articles_data.get("results", [])
+            
+            # Normalize article format
+            normalized_articles = []
+            for article in raw_articles:
+                normalized_article = {
+                    "title": article.get("title", ""),
+                    "content": article.get("body", ""),
+                    "url": article.get("url", ""),
+                    "published_at": article.get("dateTime", ""),
+                    "source": article.get("source", {}).get("title", "Unknown"),
+                    "author": self._extract_authors(article.get("authors", [])),
+                    "language": article.get("lang", ""),
+                    "sentiment": article.get("sentiment"),
+                    "relevance": article.get("relevance"),
+                    "concepts": self._extract_concepts(article.get("concepts", [])),
+                    "categories": self._extract_categories(article.get("categories", [])),
+                    "location": self._extract_location(article.get("location")),
+                    "image": article.get("image"),
+                    "social_score": article.get("socialScore", {})
+                }
+                normalized_articles.append(normalized_article)
+            
+            # Create summary
+            summary = f"Found {len(normalized_articles)} articles on {topic}"
+            if date_start and date_end:
+                summary += f" from {date_start} to {date_end}"
+            
+            # Create metadata
+            metadata = {
+                "total_results": articles_data.get("totalResults", len(normalized_articles)),
+                "articles_returned": len(normalized_articles),
+                "search_topic": topic,
+                "concept_uri": concept_uri,
+                "date_start": date_start,
+                "date_end": date_end,
+                "source_quality": "top_40_percent",
+                "query_timestamp": datetime.now().isoformat()
+            }
+            
+            print(f"[NewsAPIAIService] Found {len(normalized_articles)} articles using concept URI")
+            
+            return {
+                "articles": normalized_articles,
+                "summary": summary,
+                "metadata": metadata
+            }
+            
+        except Exception as e:
+            print(f"[NewsAPIAIService] Error in search_articles_by_topic: {str(e)}")
+            return {"articles": [], "summary": "Topic search failed", "metadata": {}}
     
     async def fetch_financial_news(
         self,
@@ -455,6 +609,31 @@ class NewsAPIAIService:
         if author_names:
             return ", ".join(author_names[:2])  # Return up to 2 authors
         return "Unknown"
+    
+    def _extract_concepts(self, concepts_list: List[Dict]) -> List[str]:
+        """Extract concept labels from concepts list"""
+        if not concepts_list:
+            return []
+        
+        concepts = [concept.get("label", {}).get("eng", "") for concept in concepts_list if concept.get("label")]
+        return [c for c in concepts if c][:5]  # Return up to 5 concepts
+    
+    def _extract_categories(self, categories_list: List[Dict]) -> List[str]:
+        """Extract category labels from categories list"""
+        if not categories_list:
+            return []
+        
+        categories = [cat.get("label", {}).get("eng", "") for cat in categories_list if cat.get("label")]
+        return [c for c in categories if c][:3]  # Return up to 3 categories
+    
+    def _extract_location(self, location_data: Optional[Dict]) -> str:
+        """Extract location from location data"""
+        if not location_data:
+            return ""
+        
+        if isinstance(location_data, dict):
+            return location_data.get("label", {}).get("eng", "")
+        return str(location_data)
     
     def _generate_summary(
         self,

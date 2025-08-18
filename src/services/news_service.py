@@ -49,6 +49,50 @@ class NewsService:
                 print(f"Error in fetch_general_market: {str(e)}")
                 return []
     
+    async def fetch_for_topic(self, topic: str, max_articles: int = 20) -> List[Dict]:
+        """
+        Fetch articles for a specific topic using Finlight v2 API
+        """
+        if not self.api_key:
+            print("[NewsService] WARNING: FINLIGHT_API_KEY not configured")
+            return []
+            
+        async with httpx.AsyncClient() as client:
+            try:
+                # Use the articles endpoint with topic query
+                response = await client.post(
+                    f"{self.base_url}/articles",
+                    headers={
+                        "accept": "application/json",
+                        "Content-Type": "application/json",
+                        "X-API-KEY": self.api_key
+                    },
+                    json={
+                        "query": topic,  # Topic-specific search
+                        "language": "en",
+                        "includeContent": True,
+                        "includeEntities": False,
+                        "excludeEmptyContent": True,
+                        "pageSize": max_articles
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    articles = data.get('articles', [])
+                    
+                    print(f"[NewsService] Fetched {len(articles)} articles for topic '{topic}' from Finlight")
+                    return articles
+                    
+                else:
+                    print(f"[NewsService] Error fetching topic articles: {response.status_code}")
+                    print(f"[NewsService] Response: {response.text}")
+                    return []
+                    
+            except Exception as e:
+                print(f"[NewsService] Error in fetch_for_topic: {str(e)}")
+                return []
+    
     async def fetch_for_tickers(self, tickers: List[str]) -> List[Dict]:
         """
         For now, just fetch all articles and let AI figure out relevance
