@@ -81,41 +81,140 @@ class FMPService:
         return normalized
     
     async def get_premarket_data(self, symbols: List[str] = None) -> Dict[str, Any]:
-        """Get premarket data for specified symbols or SPY by default"""
+        """Get premarket data with calculated percent changes using both APIs"""
         if symbols is None:
             symbols = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA"]
-        
-        data = await self._make_request("pre-post-market/" + ",".join(symbols))
-        
-        if not data:
-            return {}
         
         normalized = {
             "premarket": [],
             "summary": ""
         }
         
+        # Step 1: Get previous close prices from regular quotes API
+        print("[FMPService] Fetching previous close prices...")
+        previous_closes = {}
+        regular_quotes = await self.get_regular_quotes(symbols)
+        for quote in regular_quotes.get("quotes", []):
+            symbol = quote.get("symbol")
+            prev_close = quote.get("previousClose")
+            if symbol and prev_close:
+                previous_closes[symbol] = prev_close
+        
+        # Step 2: Get premarket bid/ask data from v4 API
+        print("[FMPService] Fetching premarket bid/ask data...")
+        for symbol in symbols:
+            v4_url = f"https://financialmodelingprep.com/api/v4/pre-post-market/{symbol}"
+            params = {'apikey': self.api_key} if self.api_key else {}
+            
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    response = await client.get(v4_url, params=params)
+                    
+                    if response.status_code == 200:
+                        stock_data = response.json()
+                        
+                        if stock_data.get("error"):
+                            print(f"[FMPService] API error for {symbol}: {stock_data.get('error')}")
+                            continue
+                            
+                        if stock_data and "bid" in stock_data and "ask" in stock_data:
+                            bid = stock_data.get("bid", 0)
+                            ask = stock_data.get("ask", 0)
+                            mid_price = (bid + ask) / 2 if bid and ask else None
+                            
+                            # Calculate change and percent change if we have previous close
+                            prev_close = previous_closes.get(symbol)
+                            change = None
+                            change_percent = None
+                            
+                            if mid_price and prev_close:
+                                change = mid_price - prev_close
+                                change_percent = (change / prev_close) * 100
+                            
+                            normalized["premarket"].append({
+                                "symbol": symbol,
+                                "preMarketPrice": mid_price,
+                                "preMarketChange": change,
+                                "preMarketChangePercent": change_percent,
+                                "lastClose": prev_close,
+                                "bid": bid,
+                                "ask": ask
+                            })
+                    else:
+                        print(f"[FMPService] Error fetching {symbol}: {response.status_code}")
+                        
+            except Exception as e:
+                print(f"[FMPService] Request error for {symbol}: {str(e)}")
+                continue
+        
+        # Create summary text with percent changes
+        summary_parts = []
+        for stock in normalized["premarket"]:
+            if stock["symbol"] and stock.get("preMarketPrice"):
+                symbol = stock["symbol"]
+                price = stock["preMarketPrice"]
+                change = stock.get("preMarketChange")
+                change_pct = stock.get("preMarketChangePercent")
+                
+                if change is not None and change_pct is not None:
+                    direction = "+" if change >= 0 else ""
+                    summary_parts.append(
+                        f"{symbol}: ${price:.2f} ({direction}{change:.2f}, {direction}{change_pct:.2f}%)"
+                    )
+                else:
+                    # Fallback to bid/ask if no previous close available
+                    bid = stock.get("bid")
+                    ask = stock.get("ask")
+                    if bid and ask:
+                        summary_parts.append(
+                            f"{symbol}: ${price:.2f} (bid: ${bid:.2f}, ask: ${ask:.2f})"
+                        )
+        
+        normalized["summary"] = " | ".join(summary_parts) if summary_parts else "No premarket data available"
+        return normalized
+    
+    async def get_regular_quotes(self, symbols: List[str] = None) -> Dict[str, Any]:
+        """Get regular market quotes with previous close data"""
+        if symbols is None:
+            symbols = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA"]
+        
+        # Use the batch quote endpoint
+        data = await self._make_request("quote/" + ",".join(symbols))
+        
+        if not data:
+            return {}
+        
+        normalized = {
+            "quotes": [],
+            "summary": ""
+        }
+        
         for stock in data:
             if stock:
-                normalized["premarket"].append({
+                normalized["quotes"].append({
                     "symbol": stock.get("symbol"),
-                    "preMarketPrice": stock.get("preMarketPrice"),
-                    "preMarketChange": stock.get("preMarketChange"),
-                    "preMarketChangePercent": stock.get("preMarketChangePercent"),
-                    "lastClose": stock.get("previousClose")
+                    "price": stock.get("price"),
+                    "previousClose": stock.get("previousClose"),
+                    "change": stock.get("change"), 
+                    "changesPercentage": stock.get("changesPercentage"),
+                    "dayLow": stock.get("dayLow"),
+                    "dayHigh": stock.get("dayHigh"),
+                    "volume": stock.get("volume")
                 })
         
         # Create summary text
         summary_parts = []
-        for stock in normalized["premarket"]:
-            if stock["symbol"] and stock["preMarketPrice"]:
-                direction = "up" if stock["preMarketChange"] > 0 else "down"
+        for stock in normalized["quotes"]:
+            if stock["symbol"] and stock.get("price"):
+                change = stock.get("change", 0) or 0
+                change_pct = stock.get("changesPercentage", 0) or 0
+                direction = "+" if change >= 0 else ""
                 summary_parts.append(
-                    f"{stock['symbol']} premarket: ${stock['preMarketPrice']:.2f} "
-                    f"({direction} {abs(stock['preMarketChangePercent']):.2f}%)"
+                    f"{stock['symbol']}: ${stock['price']:.2f} "
+                    f"({direction}{change:.2f}, {direction}{change_pct:.2f}%)"
                 )
         
-        normalized["summary"] = " | ".join(summary_parts) if summary_parts else "No premarket data available"
+        normalized["summary"] = " | ".join(summary_parts) if summary_parts else "No quote data available"
         return normalized
     
     async def get_crypto_overview(self) -> Dict[str, Any]:
