@@ -18,6 +18,10 @@ class NewsAPIAIService:
         # Topic to Wikipedia concept URI mapping
         self.topic_concepts = {
             "artificial intelligence": "http://en.wikipedia.org/wiki/Artificial_intelligence",
+            "ai": "http://en.wikipedia.org/wiki/Artificial_intelligence",
+            "technology": "http://en.wikipedia.org/wiki/Technology", 
+            "software": "http://en.wikipedia.org/wiki/Software",
+            "tech": "http://en.wikipedia.org/wiki/Technology",
             "biotechnology": "http://en.wikipedia.org/wiki/Biotechnology", 
             "cryptocurrency": "http://en.wikipedia.org/wiki/Cryptocurrency",
             "renewable energy": "http://en.wikipedia.org/wiki/Renewable_energy",
@@ -31,7 +35,12 @@ class NewsAPIAIService:
             "machine learning": "http://en.wikipedia.org/wiki/Machine_learning",
             "climate change": "http://en.wikipedia.org/wiki/Climate_change",
             "federal reserve": "http://en.wikipedia.org/wiki/Federal_Reserve",
-            "pharmaceutical": "http://en.wikipedia.org/wiki/Pharmaceutical_industry"
+            "pharmaceutical": "http://en.wikipedia.org/wiki/Pharmaceutical_industry",
+            "news": "http://en.wikipedia.org/wiki/News",
+            "united states": "http://en.wikipedia.org/wiki/United_States",
+            "finance": "http://en.wikipedia.org/wiki/Finance",
+            "economy": "http://en.wikipedia.org/wiki/Economy",
+            "stock market": "http://en.wikipedia.org/wiki/Stock_market"
         }
     
     def get_concept_uri(self, topic: str) -> Optional[str]:
@@ -42,14 +51,40 @@ class NewsAPIAIService:
         if topic_lower in self.topic_concepts:
             return self.topic_concepts[topic_lower]
         
+        # Handle compound keywords by checking for individual matches
+        words = topic_lower.split()
+        
+        # Look for exact matches for any word in the topic
+        for word in words:
+            if word in self.topic_concepts:
+                return self.topic_concepts[word]
+        
         # Partial match for compound topics
         for known_topic, uri in self.topic_concepts.items():
             if known_topic in topic_lower or any(word in topic_lower for word in known_topic.split()):
                 return uri
         
-        # Generate URI for unknown topics
-        formatted_topic = topic.replace(" ", "_").title()
-        return f"http://en.wikipedia.org/wiki/{formatted_topic}"
+        # For multi-word topics, try the first significant word
+        significant_words = [w for w in words if len(w) > 3]  # Skip short words like "AI", "OR"
+        if significant_words:
+            first_word = significant_words[0]
+            if first_word in self.topic_concepts:
+                return self.topic_concepts[first_word]
+            
+            # Try to match technology-related terms
+            if any(tech_word in first_word for tech_word in ['tech', 'software', 'ai', 'computer']):
+                return self.topic_concepts.get('artificial_intelligence') or self.topic_concepts.get('software')
+        
+        # For unknown single words, don't create invalid URIs - return None
+        if len(words) == 1:
+            return None
+            
+        # For compound topics, try the first word
+        if words:
+            formatted_topic = words[0].title()
+            return f"http://en.wikipedia.org/wiki/{formatted_topic}"
+        
+        return None
     
     async def _make_request(self, endpoint: str, params: Optional[Dict] = None, data: Optional[Dict] = None) -> Any:
         """Make HTTP request with consistent error handling"""

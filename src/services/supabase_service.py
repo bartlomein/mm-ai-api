@@ -339,6 +339,127 @@ class SupabaseService:
                 "success": False,
                 "error": str(e)
             }
+    
+    async def save_daily_briefing(
+        self,
+        title: str,
+        briefing_type: str,
+        briefing_date: str,  # YYYY-MM-DD format
+        word_count: int,
+        duration_seconds: int,
+        text_content: str,
+        audio_file_path: Optional[str] = None,
+        text_file_path: Optional[str] = None,
+        blurb: Optional[str] = None,
+        tier: str = "premium",
+        is_public: bool = False,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Save a daily briefing to the briefings table (shared content, overwrites existing)
+        """
+        try:
+            briefing_data = {
+                "title": title,
+                "briefing_type": briefing_type,
+                "briefing_date": briefing_date,
+                "briefing_time": datetime.now().isoformat(),
+                "word_count": word_count,
+                "duration_seconds": duration_seconds,
+                "text_content": text_content,
+                "audio_file_path": audio_file_path,
+                "text_file_path": text_file_path,
+                "blurb": blurb,
+                "tier": tier,
+                "is_public": is_public,
+                "metadata": metadata or {}
+            }
+            
+            # Use upsert to overwrite existing briefing for the same date/type/tier
+            result = self.client.table("briefings").upsert(
+                briefing_data,
+                on_conflict="briefing_date,briefing_type,tier"
+            ).execute()
+            
+            if result.data:
+                briefing_id = result.data[0]["id"]
+                logger.info(f"✅ Daily briefing saved (overwrote if existing): {briefing_id}")
+                return {
+                    "success": True,
+                    "briefing_id": briefing_id,
+                    "data": result.data[0]
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Failed to save briefing"
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error saving daily briefing: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def save_topic_briefing(
+        self,
+        topic_id: str,
+        title: str,
+        briefing_date: str,  # YYYY-MM-DD format
+        word_count: int,
+        duration_seconds: int,
+        text_content: str,
+        audio_file_path: Optional[str] = None,
+        text_file_path: Optional[str] = None,
+        blurb: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Save a topic briefing to the topic_briefings table (shared content)
+        """
+        try:
+            briefing_data = {
+                "topic_id": topic_id,
+                "title": title,
+                "briefing_date": briefing_date,
+                "briefing_time": datetime.now().isoformat(),
+                "word_count": word_count,
+                "duration_seconds": duration_seconds,
+                "text_content": text_content,
+                "audio_file_path": audio_file_path,
+                "text_file_path": text_file_path,
+                "blurb": blurb,
+                "metadata": metadata or {}
+            }
+            
+            # Use upsert to overwrite existing topic briefing for the same topic/date
+            result = self.client.table("topic_briefings").upsert(
+                briefing_data,
+                on_conflict="topic_id,briefing_date"
+            ).execute()
+            
+            if result.data:
+                briefing_id = result.data[0]["id"]
+                logger.info(f"✅ Topic briefing saved (overwrote if existing): {briefing_id}")
+                return {
+                    "success": True,
+                    "briefing_id": briefing_id,
+                    "data": result.data[0]
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Failed to save topic briefing"
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error saving topic briefing: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
 
 # Singleton instance
 _supabase_service = None

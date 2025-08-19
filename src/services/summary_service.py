@@ -379,3 +379,60 @@ class SummaryService:
             print(f"Error generating market data script: {str(e)}")
             # Return the enhanced prompt as fallback
             return enhanced_prompt
+    
+    async def create_briefing_blurb(self, briefing_text: str, briefing_type: str = "morning") -> str:
+        """
+        Generate a 2-3 sentence blurb summarizing the biggest stories from a briefing.
+        This is separate from the briefing content and used for homepage display.
+        """
+        try:
+            # Extract key information from the briefing text
+            briefing_preview = briefing_text[:3000]  # First 3000 characters for analysis
+            
+            prompt = f"""
+            You are summarizing a market briefing for homepage display.
+            
+            TASK: Read this {briefing_type} briefing and create a 2-3 sentence blurb highlighting the biggest stories.
+            
+            BRIEFING CONTENT:
+            {briefing_preview}
+            
+            REQUIREMENTS:
+            1. Extract the 2-3 most important/impactful stories from the briefing
+            2. Write 2-3 sentences maximum (not more than 3 sentences)
+            3. Focus on what investors care most about: market movements, major news, economic events
+            4. Write in present tense, professional tone
+            5. NO technical jargon - keep it accessible
+            6. Include specific details like company names, numbers, percentages when relevant
+            
+            EXAMPLES OF GOOD BLURBS:
+            "Markets opened mixed with technology stocks leading gains of 2.1%. The Federal Reserve minutes revealed dovish sentiment on future rate cuts. Tesla reported strong quarterly deliveries beating analyst expectations."
+            
+            "Biotechnology stocks surged 3.4% following breakthrough gene therapy approval. Oil prices declined on increased production forecasts. The economic calendar shows key inflation data due Wednesday."
+            
+            FORMAT:
+            - Write as flowing sentences, not bullet points
+            - Use specific numbers and company names
+            - Keep it concise but informative
+            - Ready for homepage display
+            
+            Generate the 2-3 sentence blurb now:
+            """
+            
+            response = self.model.generate_content(prompt)
+            blurb = response.text.strip()
+            
+            # Ensure it's not too long (max ~200 characters for homepage display)
+            if len(blurb) > 200:
+                # Try to shorten it
+                sentences = blurb.split('.')
+                if len(sentences) > 2:
+                    blurb = '. '.join(sentences[:2]) + '.'
+            
+            print(f"[SummaryService] Generated blurb: {len(blurb)} characters")
+            return blurb
+            
+        except Exception as e:
+            print(f"[SummaryService] Error generating blurb: {str(e)}")
+            # Fallback blurb
+            return f"Daily {briefing_type} market briefing covering the latest financial news and market developments."

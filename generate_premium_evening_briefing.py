@@ -312,8 +312,9 @@ class PremiumEveningBriefing:
                 for active in movers["most_active"][:5]:  # Show most active for evening
                     symbol = active.get("symbol", "")
                     price = active.get("price", 0)
-                    volume = active.get("volume", 0)
-                    briefing_parts.append(f"  • {symbol}: ${price:.2f} (Vol: {volume:,})")
+                    volume = active.get("volume", 0) or 0  # Handle None values
+                    if price:  # Only show if we have valid price data
+                        briefing_parts.append(f"  • {symbol}: ${price:.2f} (Vol: {volume:,})")
         
         # Sector performance - comprehensive for evening
         sectors = trading_data.get("sector_performance", {})

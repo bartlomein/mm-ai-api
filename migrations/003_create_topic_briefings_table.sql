@@ -1,10 +1,9 @@
 -- Migration: Create topic_briefings table for topic-specific briefings
 -- File: 003_create_topic_briefings_table.sql
 
--- Create topic_briefings table
+-- Create topic_briefings table (shared content - no user ownership)
 CREATE TABLE topic_briefings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     title TEXT NOT NULL, -- Auto-generated title like "Biotechnology News - August 18, 2025"
     briefing_date DATE NOT NULL,
@@ -19,24 +18,22 @@ CREATE TABLE topic_briefings (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
     
-    -- Ensure one topic briefing per user per topic per day
-    UNIQUE(user_id, topic_id, briefing_date)
+    -- Ensure one briefing per topic per day (shared by all subscribers)
+    UNIQUE(topic_id, briefing_date)
 );
 
 -- Add RLS policies for topic briefings
 ALTER TABLE topic_briefings ENABLE ROW LEVEL SECURITY;
 
--- Users can only see their own topic briefings
-CREATE POLICY "Users can view own topic briefings" ON topic_briefings
-    FOR SELECT USING (auth.uid() = user_id);
+-- All authenticated users can view topic briefings (access control via subscriptions)
+CREATE POLICY "Authenticated users can view topic briefings" ON topic_briefings
+    FOR SELECT USING (auth.role() = 'authenticated');
 
--- Users can manage their own topic briefings
-CREATE POLICY "Users can manage own topic briefings" ON topic_briefings
-    FOR ALL USING (auth.uid() = user_id);
+-- Only service role can manage topic briefings (system-generated)
+CREATE POLICY "Service role can manage topic briefings" ON topic_briefings
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
 
 -- Create indexes for efficient querying
-CREATE INDEX idx_topic_briefings_user_id ON topic_briefings(user_id);
 CREATE INDEX idx_topic_briefings_topic_id ON topic_briefings(topic_id);
 CREATE INDEX idx_topic_briefings_date ON topic_briefings(briefing_date);
-CREATE INDEX idx_topic_briefings_user_date ON topic_briefings(user_id, briefing_date);
-CREATE INDEX idx_topic_briefings_user_topic_date ON topic_briefings(user_id, topic_id, briefing_date);
+CREATE INDEX idx_topic_briefings_topic_date ON topic_briefings(topic_id, briefing_date);

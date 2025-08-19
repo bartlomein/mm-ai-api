@@ -44,6 +44,7 @@ from src.services.newsapiai_service import NewsAPIAIService
 from src.services.news_service import NewsService
 from src.services.summary_service import SummaryService
 from src.services.audio_service import AudioService
+from src.services.supabase_service import SupabaseService
 from src.utils.timezone_utils import get_est_time, is_weekend_est, get_est_weekday_name, format_est_timestamp, format_est_display
 
 class PremiumMorningBriefing:
@@ -56,6 +57,7 @@ class PremiumMorningBriefing:
         self.news_service = NewsService()  # Finlight
         self.summary_service = SummaryService()
         self.audio_service = AudioService()
+        self.supabase_service = SupabaseService()
 
     async def fetch_economic_calendar(self) -> Dict[str, Any]:
         """Fetch economic calendar events for next 3 business days."""
@@ -817,14 +819,68 @@ class PremiumMorningBriefing:
                 print(f"❌ Audio generation failed: {str(e)}")
                 audio_file = None
 
+        # Step 6: Generate blurb for homepage display
+        print("\n📝 Generating briefing blurb...")
+        blurb = await self.summary_service.create_briefing_blurb(gemini_briefing, "morning")
+        print(f"📋 Blurb: {blurb}")
+
+        # Step 7: Upload to Supabase (shared briefing for all premium users)
+        print(f"\n💾 Uploading briefing to Supabase (will overwrite if exists)...")
+        
+        # Calculate duration from word count
+        estimated_duration = int((len(gemini_briefing.split()) / 150) * 60)  # seconds
+        
+        # Create title with date
+        briefing_date = get_est_time()
+        title = f"Morning Briefing - {briefing_date.strftime('%B %d, %Y')}"
+        
+        try:
+            upload_result = await self.supabase_service.save_daily_briefing(
+                title=title,
+                briefing_type="premium_morning",
+                briefing_date=briefing_date.strftime("%Y-%m-%d"),
+                word_count=len(gemini_briefing.split()),
+                duration_seconds=estimated_duration,
+                text_content=gemini_briefing,
+                audio_file_path=audio_file,
+                text_file_path=filename,
+                blurb=blurb,
+                tier="premium",
+                is_public=False,
+                metadata={
+                    "sources_used": ["FMP", "NewsAPI.ai", "Finlight"],
+                    "total_articles": sum([
+                        len(selected_stories["world"]),
+                        len(selected_stories["usa"]),
+                        len(selected_stories["finance"]),
+                        len(selected_stories["tech"])
+                    ]),
+                    "economic_events": len(all_data["economic_calendar"].get("high_impact_events", [])),
+                    "generation_timestamp": timestamp
+                }
+            )
+            
+            if upload_result["success"]:
+                print(f"   ✅ Briefing uploaded to Supabase: {upload_result['briefing_id']}")
+            else:
+                print(f"   ❌ Supabase upload failed: {upload_result.get('error', 'Unknown error')}")
+                
+        except Exception as e:
+            print(f"   ❌ Supabase upload error: {str(e)}")
+            upload_result = {"success": False, "error": str(e)}
+
         # Return results
         return {
             "success": True,
             "briefing_file": filename,
             "raw_data_file": raw_filename,
             "audio_file": audio_file,
+            "blurb": blurb,
+            "title": title,
             "gemini_word_count": len(gemini_briefing.split()),
             "raw_word_count": len(raw_briefing_text.split()),
+            "supabase_uploaded": upload_result.get("success", False),
+            "supabase_briefing_id": upload_result.get("briefing_id"),
             "data_summary": {
                 "economic_events": len(all_data["economic_calendar"].get("high_impact_events", [])),
                 "world_news": len(selected_stories["world"]),
@@ -866,6 +922,13 @@ async def main():
     print(f"      🇺🇸 USA: {result['data_summary']['usa_news']} stories")
     print(f"      💰 Finance: {result['data_summary']['finance_news']} stories")
     print(f"      💻 Tech: {result['data_summary']['tech_news']} stories")
+    
+    # Show blurb and upload status
+    print(f"\n📋 Briefing Details:")
+    print(f"   🏷️ Title: {result.get('title', 'N/A')}")
+    print(f"   📝 Blurb: {result.get('blurb', 'N/A')}")
+    print(f"   💾 Uploaded to Supabase: {'✅ Yes' if result.get('supabase_uploaded') else '❌ No'}")
+    
     if result.get('audio_file'):
         print(f"\n🎧 Audio briefing ready to play: {result['audio_file']}")
     else:
